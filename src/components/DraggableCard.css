@@ -1,0 +1,910 @@
+.draggable-card-container {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  background: transparent;
+  user-select: none;
+  transition: none;
+  will-change: auto; /* Only use will-change when dragging */
+  border-radius: 12px; /* Match card's rounded corners for outline */
+}
+
+.draggable-card-container.dragging {
+  pointer-events: none;
+  will-change: transform; /* Enable GPU acceleration only when dragging */
+}
+
+.draggable-card-container.dragging * {
+  pointer-events: none !important;
+}
+
+.draggable-card-container.dragging .card-header {
+  backdrop-filter: none !important;
+}
+
+.draggable-card-container.dragging .card-body {
+  backdrop-filter: none !important;
+}
+
+/* Card in placement mode (following mouse) */
+.draggable-card-container.placing {
+  opacity: 0.8;
+  pointer-events: none;
+  cursor: crosshair !important;
+}
+
+.draggable-card-container.placing .draggable-card {
+  border: 2px dashed rgba(255, 215, 0, 0.6) !important;
+  animation: pulse-border 1s infinite;
+}
+
+@keyframes pulse-border {
+  0% {
+    border-color: rgba(255, 215, 0, 0.6);
+  }
+  50% {
+    border-color: rgba(255, 215, 0, 1);
+  }
+  100% {
+    border-color: rgba(255, 215, 0, 0.6);
+  }
+}
+
+/* Subtle icon pulse used when zoomed out */
+@keyframes pulse {
+  0% {
+    transform: scale(1);
+    opacity: 0.9;
+  }
+  50% {
+    transform: scale(1.05);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 0.9;
+  }
+}
+
+.draggable-card-container.maximized {
+  position: fixed !important;
+  left: 10px !important;
+  top: 10px !important;
+  right: 10px !important;
+  bottom: 10px !important;
+  width: calc(100vw - 20px) !important;
+  height: calc(100vh - 20px) !important;
+  z-index: 9999 !important;
+}
+
+.card-header {
+  height: 36px;
+  background: linear-gradient(
+    135deg,
+    rgba(30, 30, 40, 0.6),
+    rgba(40, 40, 55, 0.6)
+  );
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 12px 12px 0 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 12px;
+  cursor: move;
+  /* Removed permanent backdrop-filter for performance */
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+  z-index: 1; /* Ensure header is above content for dragging */
+}
+
+.card-header:hover {
+  background: linear-gradient(
+    135deg,
+    rgba(35, 35, 45, 0.7),
+    rgba(45, 45, 60, 0.7)
+  );
+}
+
+/* Darker, more subtle headers for markdown/documentation cards (info and purple variants) */
+.draggable-card-container[data-variant="info"] > .card-header,
+.draggable-card-container[data-variant="purple"] > .card-header {
+  background: linear-gradient(
+    135deg,
+    rgba(10, 10, 15, 0.95),
+    rgba(15, 15, 20, 0.95)
+  ) !important;
+  border: 1px solid rgba(255, 255, 255, 0.02) !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4) !important;
+}
+
+.draggable-card-container[data-variant="info"] > .card-header:hover,
+.draggable-card-container[data-variant="purple"] > .card-header:hover {
+  background: linear-gradient(
+    135deg,
+    rgba(12, 12, 17, 0.98),
+    rgba(17, 17, 22, 0.98)
+  ) !important;
+  border: 1px solid rgba(255, 255, 255, 0.03) !important;
+}
+
+/* Also apply to locked state */
+.draggable-card-container.locked[data-variant="info"] > .card-header,
+.draggable-card-container.locked[data-variant="purple"] > .card-header {
+  background: linear-gradient(
+    135deg,
+    rgba(10, 10, 15, 0.95),
+    rgba(15, 15, 20, 0.95)
+  ) !important;
+  border: 1px solid rgba(255, 255, 255, 0.02) !important;
+}
+
+.card-header-content {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  min-width: 0;
+}
+
+.card-variant-indicator {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #6b7280;
+  flex-shrink: 0;
+}
+
+.card-variant-indicator[data-variant="primary"] {
+  background: #3b82f6;
+}
+.card-variant-indicator[data-variant="success"] {
+  background: #10b981;
+}
+.card-variant-indicator[data-variant="warning"] {
+  background: #f59e0b;
+}
+.card-variant-indicator[data-variant="danger"] {
+  background: #ef4444;
+}
+.card-variant-indicator[data-variant="info"] {
+  background: #06b6d4;
+}
+.card-variant-indicator[data-variant="purple"] {
+  background: #5b3a96;
+}
+.card-variant-indicator[data-variant="glow"] {
+  background: linear-gradient(135deg, #667eea, #764ba2);
+  box-shadow: 0 0 10px rgba(102, 126, 234, 0.5);
+}
+.card-variant-indicator[data-variant="prompt"] {
+  background: linear-gradient(135deg, #fbbf24, #f59e0b);
+  box-shadow: 0 0 8px rgba(251, 191, 36, 0.4);
+}
+
+.card-title-text {
+  color: #e5e7eb;
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.card-controls {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.card-control-btn {
+  background: transparent;
+  border: none;
+  color: #9ca3af;
+  cursor: pointer;
+  padding: 4px 6px;
+  font-size: 14px;
+  border-radius: 4px;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.card-control-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #e5e7eb;
+}
+
+.card-control-btn.close-btn:hover {
+  background: rgba(239, 68, 68, 0.2);
+  color: #ef4444;
+}
+
+.card-control-btn.save-btn {
+  color: #10b981;
+  font-weight: bold;
+}
+
+.card-control-btn.save-btn:hover {
+  background: rgba(16, 185, 129, 0.2);
+  color: #34d399;
+}
+
+.card-control-btn.cancel-btn {
+  color: #f59e0b;
+}
+
+.card-control-btn.cancel-btn:hover {
+  background: rgba(245, 158, 11, 0.2);
+  color: #fbbf24;
+}
+
+.card-wrapper {
+  flex: 1;
+  position: relative;
+  perspective: 1000px;
+  transform-style: preserve-3d;
+  overflow: hidden;
+  border-radius: 0 0 16px 16px;
+  cursor: default; /* Default cursor for card content */
+}
+
+.card {
+  width: 100%;
+  height: 100%;
+  position: relative;
+  transform-style: preserve-3d;
+  transition: transform 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.card.flipped {
+  transform: rotateY(180deg);
+}
+
+.card-front,
+.card-back {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  backface-visibility: hidden;
+  border-radius: 0 0 16px 16px;
+  background: linear-gradient(
+    135deg,
+    rgba(20, 20, 30, 0.4),
+    rgba(30, 30, 40, 0.4)
+  );
+  /* Removed permanent backdrop-filter for performance */
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-top: none;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.card-back {
+  transform: rotateY(180deg);
+  background: linear-gradient(
+    135deg,
+    rgba(25, 25, 35, 0.4),
+    rgba(35, 35, 45, 0.4)
+  );
+}
+
+.card-content {
+  flex: 1;
+  padding: 24px;
+  overflow-y: auto;
+  color: #e5e7eb;
+  font-size: 14px;
+  line-height: 1.6;
+  display: flex;
+  flex-direction: column;
+  border-radius: 0 0 12px 12px; /* Rounded bottom corners to match header */
+}
+
+.card-edit-container {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  height: 100%;
+}
+
+.card-display-container {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  height: 100%;
+}
+
+.card-title-edit {
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  padding: 10px 12px;
+  color: #e5e7eb;
+  font-size: 18px;
+  font-weight: 600;
+  outline: none;
+  transition: all 0.2s;
+}
+
+.card-title-edit:focus {
+  background: rgba(0, 0, 0, 0.4);
+  border-color: rgba(255, 255, 255, 0.3);
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+}
+
+.card-title-edit:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.card-title-edit::placeholder {
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.card-content-title {
+  margin: 0 0 12px 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: #f3f4f6;
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.card-content-textarea {
+  flex: 1;
+  width: 100%;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  padding: 12px;
+  outline: none;
+  resize: none;
+  color: #e5e7eb;
+  font-size: 14px;
+  line-height: 1.6;
+  font-family: inherit;
+  transition: all 0.2s;
+}
+
+.card-content-textarea:focus {
+  background: rgba(0, 0, 0, 0.4);
+  border-color: rgba(255, 255, 255, 0.3);
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+}
+
+.card-content-textarea::placeholder {
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.card-content-display {
+  flex: 1;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  color: #e5e7eb;
+  overflow-y: auto;
+}
+
+.card-content::-webkit-scrollbar {
+  width: 6px;
+}
+
+.card-content::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.05);
+  border-radius: 3px;
+}
+
+.card-content::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 3px;
+}
+
+.card-content::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.3);
+}
+
+.card-actions {
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: space-around;
+  background: rgba(0, 0, 0, 0.02);
+  border-top: 1px solid rgba(0, 0, 0, 0.1);
+  padding: 0 16px;
+  /* Removed permanent backdrop-filter for performance */
+}
+
+.action-button {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 8px;
+  border-radius: 8px;
+  color: #6b7280;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.action-button:hover {
+  background: rgba(0, 0, 0, 0.05);
+  color: #111827;
+  transform: scale(1.1);
+}
+
+.action-button:active {
+  transform: scale(0.95);
+}
+
+/* Card Variants - All use dark semi-transparent backgrounds with colored accents */
+.card-wrapper.primary .card-front,
+.card-wrapper.primary .card-back {
+  background: linear-gradient(
+    135deg,
+    rgba(20, 30, 50, 0.4),
+    rgba(30, 40, 60, 0.4)
+  );
+  border-color: rgba(59, 130, 246, 0.3);
+  box-shadow:
+    0 8px 32px rgba(59, 130, 246, 0.15),
+    inset 0 1px 0 rgba(59, 130, 246, 0.1);
+}
+
+.card-wrapper.success .card-front,
+.card-wrapper.success .card-back {
+  background: linear-gradient(
+    135deg,
+    rgba(20, 40, 30, 0.4),
+    rgba(30, 50, 40, 0.4)
+  );
+  border-color: rgba(16, 185, 129, 0.3);
+  box-shadow:
+    0 8px 32px rgba(16, 185, 129, 0.15),
+    inset 0 1px 0 rgba(16, 185, 129, 0.1);
+}
+
+.card-wrapper.warning .card-front,
+.card-wrapper.warning .card-back {
+  background: linear-gradient(
+    135deg,
+    rgba(40, 30, 20, 0.4),
+    rgba(50, 40, 30, 0.4)
+  );
+  border-color: rgba(245, 158, 11, 0.3);
+  box-shadow:
+    0 8px 32px rgba(245, 158, 11, 0.15),
+    inset 0 1px 0 rgba(245, 158, 11, 0.1);
+}
+
+.card-wrapper.danger .card-front,
+.card-wrapper.danger .card-back {
+  background: linear-gradient(
+    135deg,
+    rgba(40, 20, 20, 0.4),
+    rgba(50, 30, 30, 0.4)
+  );
+  border-color: rgba(239, 68, 68, 0.3);
+  box-shadow:
+    0 8px 32px rgba(239, 68, 68, 0.15),
+    inset 0 1px 0 rgba(239, 68, 68, 0.1);
+}
+
+.card-wrapper.info .card-front,
+.card-wrapper.info .card-back {
+  background: linear-gradient(
+    135deg,
+    rgba(10, 18, 20, 0.4),
+    rgba(15, 23, 25, 0.4)
+  );
+  border-color: rgba(6, 182, 212, 0.15);
+  box-shadow:
+    0 8px 32px rgba(6, 182, 212, 0.08),
+    inset 0 1px 0 rgba(6, 182, 212, 0.05);
+}
+
+.card-wrapper.purple .card-front,
+.card-wrapper.purple .card-back {
+  background: linear-gradient(
+    135deg,
+    rgba(15, 10, 20, 0.4),
+    rgba(20, 15, 25, 0.4)
+  );
+  border-color: rgba(139, 92, 246, 0.15);
+  box-shadow:
+    0 8px 32px rgba(139, 92, 246, 0.08),
+    inset 0 1px 0 rgba(139, 92, 246, 0.05);
+}
+
+.card-wrapper.glow .card-front,
+.card-wrapper.glow .card-back {
+  background: linear-gradient(
+    135deg,
+    rgba(30, 20, 45, 0.4),
+    rgba(40, 30, 55, 0.4)
+  );
+  border: 2px solid transparent;
+  background-clip: padding-box;
+  position: relative;
+}
+
+.card-wrapper.glow .card-front::before,
+.card-wrapper.glow .card-back::before {
+  content: "";
+  position: absolute;
+  top: -2px;
+  left: -2px;
+  right: -2px;
+  bottom: -2px;
+  background: linear-gradient(135deg, #667eea, #764ba2);
+  border-radius: inherit;
+  z-index: -1;
+  opacity: 0.5;
+  animation: glow-pulse 3s ease-in-out infinite;
+}
+
+@keyframes glow-pulse {
+  0%,
+  100% {
+    opacity: 0.5;
+  }
+  50% {
+    opacity: 0.8;
+  }
+}
+
+.resize-handle {
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  width: 20px;
+  height: 20px;
+  cursor: nwse-resize;
+  background: linear-gradient(
+    135deg,
+    transparent 50%,
+    rgba(255, 255, 255, 0.3) 50%
+  );
+  border-radius: 0 0 16px 0;
+}
+
+.resize-handle:hover {
+  background: linear-gradient(
+    135deg,
+    transparent 40%,
+    rgba(255, 255, 255, 0.5) 40%
+  );
+}
+
+/* Dark theme adjustments */
+@media (prefers-color-scheme: dark) {
+  .card-front,
+  .card-back {
+    background: linear-gradient(
+      135deg,
+      rgba(30, 30, 40, 0.95),
+      rgba(40, 40, 55, 0.95)
+    );
+    border-color: rgba(255, 255, 255, 0.1);
+    color: #e5e7eb;
+  }
+
+  .card-content-textarea,
+  .card-content-display {
+    color: #e5e7eb;
+  }
+
+  .card-actions {
+    background: rgba(255, 255, 255, 0.02);
+    border-top-color: rgba(255, 255, 255, 0.1);
+  }
+
+  .action-button {
+    color: #9ca3af;
+  }
+
+  .action-button:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: #e5e7eb;
+  }
+}
+/* Markdown Card Specific Styles */
+.markdown-card {
+  will-change: transform;
+  transition: none;
+}
+
+.markdown-card.dragging {
+  opacity: 0.9;
+  pointer-events: none;
+  z-index: 10000;
+}
+
+/* Darker headers for all markdown cards */
+.markdown-card .card-header {
+  background: linear-gradient(
+    135deg,
+    rgba(10, 10, 15, 0.95),
+    rgba(15, 15, 20, 0.95)
+  ) !important;
+  border: 1px solid rgba(255, 255, 255, 0.02) !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4) !important;
+}
+
+.markdown-card .card-header:hover {
+  background: linear-gradient(
+    135deg,
+    rgba(12, 12, 17, 0.98),
+    rgba(17, 17, 22, 0.98)
+  ) !important;
+}
+
+.markdown-card .card-variant-indicator {
+  width: auto;
+  height: auto;
+  font-size: 16px;
+}
+
+.markdown-card .file-path {
+  font-size: 0.85em;
+  opacity: 0.7;
+  font-style: italic;
+}
+
+.markdown-card .card {
+  background: linear-gradient(
+    135deg,
+    rgba(20, 20, 30, 0.95),
+    rgba(30, 30, 40, 0.95)
+  );
+  /* Removed permanent backdrop-filter for performance */
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-top: none;
+  border-radius: 0 0 16px 16px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.markdown-content {
+  height: 100%;
+  overflow-y: auto;
+  padding: 20px;
+  background: transparent;
+  cursor: default !important; /* Override any grab cursor */
+  user-select: text; /* Allow text selection */
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  transform: translateZ(0); /* Force GPU layer to fix blur */
+  backface-visibility: hidden; /* Prevent flickering */
+  border-radius: 0 0 12px 12px; /* Rounded bottom corners to match header */
+}
+
+.markdown-editor {
+  width: 100%;
+  height: 100%;
+  background: rgba(20, 20, 30, 0.5);
+  color: #e0e0e0;
+  border: none;
+  padding: 15px;
+  font-family: "Fira Code", "Consolas", monospace;
+  font-size: 14px;
+  line-height: 1.6;
+  resize: none;
+  cursor: text !important;
+}
+
+.markdown-raw {
+  background: rgba(20, 20, 30, 0.5);
+  color: #e0e0e0;
+  padding: 15px;
+  font-family: "Fira Code", "Consolas", monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  overflow: auto;
+  height: 100%;
+  margin: 0;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  cursor: text !important;
+  user-select: text;
+}
+
+.markdown-preview {
+  height: 100%;
+  overflow-y: auto;
+  color: #e0e0e0;
+  cursor: default !important; /* Normal cursor for content */
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  user-select: text; /* Allow text selection */
+}
+
+/* Markdown Preview Styles */
+.markdown-preview h1 {
+  color: #4fc3f7;
+  border-bottom: 2px solid rgba(79, 195, 247, 0.3);
+  padding-bottom: 8px;
+  margin: 20px 0 15px 0;
+}
+
+.markdown-preview h2 {
+  color: #81c784;
+  margin: 18px 0 12px 0;
+}
+
+.markdown-preview h3 {
+  color: #ffb74d;
+  margin: 15px 0 10px 0;
+}
+
+.markdown-preview h4,
+.markdown-preview h5,
+.markdown-preview h6 {
+  color: #ba68c8;
+  margin: 12px 0 8px 0;
+}
+
+.markdown-preview p {
+  line-height: 1.6;
+  margin: 10px 0;
+}
+
+.markdown-preview code {
+  background: rgba(100, 100, 120, 0.2);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-family: "Fira Code", "Consolas", monospace;
+  font-size: 0.9em;
+  color: #ffd54f;
+}
+
+.markdown-preview pre {
+  background: rgba(20, 20, 30, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  padding: 15px;
+  overflow-x: auto;
+  margin: 15px 0;
+}
+
+.markdown-preview pre code {
+  background: transparent;
+  padding: 0;
+  color: #e0e0e0;
+}
+
+.markdown-preview ul,
+.markdown-preview ol {
+  margin: 10px 0;
+  padding-left: 25px;
+}
+
+.markdown-preview li {
+  margin: 5px 0;
+  line-height: 1.6;
+}
+
+.markdown-preview blockquote {
+  border-left: 4px solid #4fc3f7;
+  padding-left: 15px;
+  margin: 15px 0;
+  color: #b0b0b0;
+  font-style: italic;
+}
+
+.markdown-preview table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 15px 0;
+}
+
+.markdown-preview th,
+.markdown-preview td {
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  padding: 8px 12px;
+  text-align: left;
+}
+
+.markdown-preview th {
+  background: rgba(79, 195, 247, 0.1);
+  color: #4fc3f7;
+  font-weight: 600;
+}
+
+.markdown-preview a {
+  color: #4fc3f7;
+  text-decoration: none;
+  border-bottom: 1px dotted #4fc3f7;
+  transition: all 0.2s;
+}
+
+.markdown-preview a:hover {
+  color: #81c784;
+  border-bottom-color: #81c784;
+}
+
+.markdown-preview hr {
+  border: none;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  margin: 20px 0;
+}
+
+/* Code Block with Copy Button */
+.code-block {
+  position: relative;
+  margin: 15px 0;
+}
+
+.code-block-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: rgba(30, 30, 40, 0.8);
+  padding: 5px 10px;
+  border-radius: 8px 8px 0 0;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-bottom: none;
+}
+
+.code-language {
+  color: #81c784;
+  font-size: 0.85em;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.code-copy-btn {
+  background: rgba(79, 195, 247, 0.2);
+  color: #4fc3f7;
+  border: 1px solid rgba(79, 195, 247, 0.3);
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 0.8em;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.code-copy-btn:hover {
+  background: rgba(79, 195, 247, 0.3);
+  border-color: #4fc3f7;
+}
+
+.code-block pre {
+  margin: 0;
+  border-radius: 0 0 8px 8px;
+}
+
+/* Checkbox styles for task lists */
+.markdown-preview input[type="checkbox"] {
+  margin-right: 8px;
+}
+
+.markdown-preview ul.contains-task-list {
+  list-style: none;
+  padding-left: 0;
+}
+
+.markdown-preview li.task-list-item {
+  display: flex;
+  align-items: flex-start;
+  margin: 8px 0;
+}
+
+/* Locked cards - Remove border, minimal styling */
+.draggable-card-container.locked {
+  border: none !important;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5) !important;
+}
+
+/* Lock button styling when card is locked */
+.draggable-card-container.locked .lock-btn {
+  border: 2px solid rgba(255, 255, 255, 0.9) !important;
+  box-shadow: 0 0 12px rgba(255, 255, 255, 0.4) !important;
+  background: rgba(255, 255, 255, 0.1) !important;
+}

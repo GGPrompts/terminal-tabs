@@ -1,0 +1,343 @@
+.command-center {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(135deg, #000814 0%, #001d3d 100%);
+  border: 2px solid #00ff41;
+  border-radius: 4px;
+  box-shadow:
+    0 0 40px rgba(0, 255, 65, 0.5),
+    inset 0 0 40px rgba(0, 255, 65, 0.1);
+  overflow: hidden;
+  font-family: "JetBrains Mono", "Consolas", monospace;
+}
+
+/* Top HUD Display */
+.hud-top {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 40px;
+  background: linear-gradient(
+    180deg,
+    rgba(0, 255, 65, 0.2) 0%,
+    transparent 100%
+  );
+  border-bottom: 1px solid rgba(0, 255, 65, 0.3);
+  display: flex;
+  justify-content: space-around;
+  align-items: center;
+  z-index: 10;
+  backdrop-filter: blur(10px);
+}
+
+.hud-section {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 5px 20px;
+}
+
+.hud-label {
+  font-size: 9px;
+  color: rgba(0, 255, 65, 0.6);
+  text-transform: uppercase;
+  letter-spacing: 2px;
+}
+
+.hud-value {
+  font-size: 14px;
+  color: #00ff41;
+  font-weight: bold;
+  text-shadow: 0 0 10px currentColor;
+}
+
+.status-online {
+  color: #00ff41;
+  animation: pulse-green 2s infinite;
+}
+
+@keyframes pulse-green {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.7;
+  }
+}
+
+/* Side Panels */
+.hud-left,
+.hud-right {
+  position: absolute;
+  top: 40px;
+  bottom: 60px;
+  width: 40px;
+  pointer-events: none;
+  z-index: 5;
+}
+
+.hud-left {
+  left: 0;
+  background: linear-gradient(
+    90deg,
+    rgba(0, 255, 65, 0.1) 0%,
+    transparent 100%
+  );
+  border-right: 1px solid rgba(0, 255, 65, 0.2);
+}
+
+.hud-right {
+  right: 0;
+  background: linear-gradient(
+    -90deg,
+    rgba(0, 255, 65, 0.1) 0%,
+    transparent 100%
+  );
+  border-left: 1px solid rgba(0, 255, 65, 0.2);
+}
+
+/* Corner Decorations */
+.hud-corner-tl,
+.hud-corner-tr,
+.hud-corner-bl,
+.hud-corner-br {
+  position: absolute;
+  width: 30px;
+  height: 30px;
+  border: 2px solid #00ff41;
+  opacity: 0.6;
+}
+
+.hud-corner-tl {
+  top: 0;
+  left: 0;
+  border-right: none;
+  border-bottom: none;
+}
+
+.hud-corner-tr {
+  top: 0;
+  right: 0;
+  border-left: none;
+  border-bottom: none;
+}
+
+.hud-corner-bl {
+  bottom: 0;
+  left: 0;
+  border-right: none;
+  border-top: none;
+}
+
+.hud-corner-br {
+  bottom: 0;
+  right: 0;
+  border-left: none;
+  border-top: none;
+}
+
+/* Terminal Viewport */
+.terminal-viewport {
+  position: absolute;
+  top: 45px;
+  left: 45px;
+  right: 45px;
+  bottom: 65px;
+  background: rgba(0, 8, 20, 0.95);
+  border: 1px solid rgba(0, 255, 65, 0.2);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.terminal-viewport .xterm {
+  height: 100%;
+  padding: 10px;
+}
+
+/* Bottom Control Panel */
+.hud-bottom {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 60px;
+  background: linear-gradient(0deg, rgba(0, 255, 65, 0.2) 0%, transparent 100%);
+  border-top: 1px solid rgba(0, 255, 65, 0.3);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 10;
+  backdrop-filter: blur(10px);
+}
+
+.quick-actions {
+  display: flex;
+  gap: 20px;
+}
+
+.hud-button {
+  background: linear-gradient(
+    135deg,
+    rgba(0, 255, 65, 0.1) 0%,
+    rgba(0, 255, 65, 0.05) 100%
+  );
+  border: 1px solid #00ff41;
+  color: #00ff41;
+  padding: 8px 16px;
+  border-radius: 2px;
+  cursor: pointer;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: all 0.3s;
+  font-family: inherit;
+}
+
+.hud-button:hover {
+  background: rgba(0, 255, 65, 0.2);
+  box-shadow:
+    0 0 20px rgba(0, 255, 65, 0.5),
+    inset 0 0 10px rgba(0, 255, 65, 0.2);
+  transform: translateY(-2px);
+}
+
+.hud-button:active {
+  transform: translateY(0);
+}
+
+.button-icon {
+  font-size: 16px;
+  display: inline-block;
+  animation: rotate 4s linear infinite;
+}
+
+@keyframes rotate {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Scan Line Effect */
+.hud-scanline {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, #00ff41, transparent);
+  animation: scan-vertical 3s linear infinite;
+  opacity: 0.3;
+}
+
+@keyframes scan-vertical {
+  0% {
+    top: 0;
+  }
+  100% {
+    top: 100%;
+  }
+}
+
+/* Tactical Grid Overlay */
+.tactical-grid {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-image:
+    repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 19px,
+      rgba(0, 255, 65, 0.03) 19px,
+      rgba(0, 255, 65, 0.03) 20px
+    ),
+    repeating-linear-gradient(
+      90deg,
+      transparent,
+      transparent 19px,
+      rgba(0, 255, 65, 0.03) 19px,
+      rgba(0, 255, 65, 0.03) 20px
+    );
+  pointer-events: none;
+}
+
+/* Scan Effect Overlay */
+.scan-effect {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(
+    180deg,
+    transparent 0%,
+    rgba(0, 255, 65, 0.02) 50%,
+    transparent 100%
+  );
+  animation: scan-effect 4s linear infinite;
+  pointer-events: none;
+  z-index: 15;
+}
+
+@keyframes scan-effect {
+  0% {
+    transform: translateY(-100%);
+  }
+  100% {
+    transform: translateY(100%);
+  }
+}
+
+/* Glitch Effect on Hover */
+.command-center:hover .hud-value {
+  animation: glitch 0.3s infinite;
+}
+
+@keyframes glitch {
+  0%,
+  100% {
+    text-shadow:
+      0 0 10px #00ff41,
+      2px 2px 0 #ff0040,
+      -2px -2px 0 #0080ff;
+  }
+  50% {
+    text-shadow:
+      0 0 10px #00ff41,
+      -2px 2px 0 #ff0040,
+      2px -2px 0 #0080ff;
+  }
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .hud-left,
+  .hud-right {
+    width: 20px;
+  }
+
+  .terminal-viewport {
+    left: 25px;
+    right: 25px;
+  }
+
+  .quick-actions {
+    gap: 10px;
+  }
+
+  .hud-button {
+    padding: 6px 10px;
+    font-size: 10px;
+  }
+}

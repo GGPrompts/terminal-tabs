@@ -1,0 +1,296 @@
+.docs-manager {
+  padding: 20px;
+  height: 100%;
+  overflow-y: auto;
+}
+
+.docs-section {
+  margin-bottom: 30px;
+}
+
+.section-title {
+  color: #e0e0e0;
+  font-size: 16px;
+  font-weight: 600;
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.section-subtitle {
+  color: #999;
+  font-size: 12px;
+  margin-bottom: 15px;
+}
+
+/* Quick Files Grid */
+.quick-files-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+.quick-file-btn {
+  background: linear-gradient(
+    135deg,
+    rgba(30, 30, 40, 0.8),
+    rgba(40, 40, 55, 0.8)
+  );
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  padding: 12px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  position: relative;
+  overflow: hidden;
+}
+
+.quick-file-btn:hover:not(:disabled) {
+  background: linear-gradient(
+    135deg,
+    rgba(40, 40, 50, 0.9),
+    rgba(50, 50, 65, 0.9)
+  );
+  border-color: rgba(79, 195, 247, 0.5);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(79, 195, 247, 0.2);
+}
+
+.quick-file-btn.missing {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.quick-file-btn .file-emoji {
+  font-size: 24px;
+}
+
+.quick-file-btn .file-name {
+  color: #4fc3f7;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.quick-file-btn .file-desc {
+  color: #999;
+  font-size: 11px;
+}
+
+.quick-file-btn .file-status {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  color: #81c784;
+  font-size: 14px;
+}
+
+/* Project Files List */
+.project-files-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.project-file-item {
+  background: rgba(30, 30, 40, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  padding: 10px 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.project-file-item:hover {
+  background: rgba(40, 40, 50, 0.7);
+  border-color: rgba(79, 195, 247, 0.3);
+  transform: translateX(2px);
+}
+
+.file-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  min-width: 0;
+}
+
+.file-icon {
+  font-size: 20px;
+  flex-shrink: 0;
+}
+
+.file-details {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.file-details .file-name {
+  color: #e0e0e0;
+  font-size: 13px;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.file-meta {
+  color: #777;
+  font-size: 11px;
+}
+
+.add-btn {
+  background: rgba(79, 195, 247, 0.2);
+  border: 1px solid rgba(79, 195, 247, 0.3);
+  border-radius: 6px;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  color: #4fc3f7;
+  font-size: 18px;
+  font-weight: 300;
+}
+
+.add-btn:hover {
+  background: rgba(79, 195, 247, 0.3);
+  border-color: #4fc3f7;
+  transform: scale(1.1);
+}
+
+/* Custom Path Input */
+.custom-path-input {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.path-input {
+  flex: 1;
+  background: rgba(20, 20, 30, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  padding: 8px 12px;
+  color: #e0e0e0;
+  font-size: 13px;
+  outline: none;
+  transition: all 0.2s ease;
+}
+
+.path-input:focus {
+  background: rgba(20, 20, 30, 0.7);
+  border-color: rgba(79, 195, 247, 0.5);
+  box-shadow: 0 0 0 2px rgba(79, 195, 247, 0.1);
+}
+
+.path-input::placeholder {
+  color: #666;
+}
+
+.add-path-btn {
+  background: linear-gradient(
+    135deg,
+    rgba(79, 195, 247, 0.2),
+    rgba(79, 195, 247, 0.3)
+  );
+  border: 1px solid rgba(79, 195, 247, 0.4);
+  border-radius: 8px;
+  padding: 8px 16px;
+  color: #4fc3f7;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.add-path-btn:hover:not(:disabled) {
+  background: linear-gradient(
+    135deg,
+    rgba(79, 195, 247, 0.3),
+    rgba(79, 195, 247, 0.4)
+  );
+  border-color: #4fc3f7;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(79, 195, 247, 0.3);
+}
+
+.add-path-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.help-text {
+  color: #777;
+  font-size: 11px;
+  margin-top: 4px;
+}
+
+/* Loading State */
+.loading {
+  color: #999;
+  font-size: 13px;
+  text-align: center;
+  padding: 20px;
+}
+
+.no-files {
+  color: #777;
+  font-size: 13px;
+  text-align: center;
+  padding: 20px;
+  background: rgba(30, 30, 40, 0.3);
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+/* Tips Section */
+.tips {
+  background: rgba(30, 30, 40, 0.3);
+  border-radius: 12px;
+  padding: 15px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.tips-list {
+  margin: 0;
+  padding-left: 20px;
+  color: #999;
+  font-size: 12px;
+  line-height: 1.8;
+}
+
+.tips-list li {
+  margin: 4px 0;
+}
+
+/* Scrollbar */
+.docs-manager::-webkit-scrollbar {
+  width: 6px;
+}
+
+.docs-manager::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.1);
+}
+
+.docs-manager::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 3px;
+}
+
+.docs-manager::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.2);
+}

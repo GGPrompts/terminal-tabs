@@ -1,0 +1,337 @@
+.file-tree-container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: var(--card-bg, #1a1a1a);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.file-tree-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  background: rgba(255, 255, 255, 0.05);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.file-tree-title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary, #ffffff);
+}
+
+.file-tree-actions {
+  display: flex;
+  gap: 4px;
+}
+
+.file-tree-btn {
+  padding: 4px 8px;
+  background: transparent;
+  border: none;
+  color: var(--text-secondary, #a0a0a0);
+  cursor: pointer;
+  border-radius: 4px;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.file-tree-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--text-primary, #ffffff);
+}
+
+.file-tree-btn.active {
+  background: rgba(255, 200, 87, 0.2);
+  border: 1px solid #ffc857;
+  color: #ffc857;
+}
+
+.file-tree-path {
+  padding: 8px 16px;
+  background: rgba(255, 255, 255, 0.03);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.path-label {
+  color: var(--text-secondary, #808080);
+  font-weight: 500;
+}
+
+.path-value {
+  color: var(--text-primary, #ffffff);
+  font-family: "Courier New", monospace;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+}
+
+.file-tree-search {
+  display: flex;
+  align-items: center;
+  padding: 8px 16px;
+  background: rgba(255, 255, 255, 0.03);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  gap: 8px;
+}
+
+.search-icon {
+  color: var(--text-secondary, #808080);
+  flex-shrink: 0;
+}
+
+.search-input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: var(--text-primary, #ffffff);
+  font-size: 13px;
+}
+
+.search-input::placeholder {
+  color: var(--text-secondary, #606060);
+}
+
+.clear-search {
+  padding: 2px 8px;
+  background: transparent;
+  border: none;
+  color: var(--text-secondary, #808080);
+  cursor: pointer;
+  font-size: 18px;
+  line-height: 1;
+  border-radius: 4px;
+  transition: all 0.2s;
+}
+
+.clear-search:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--text-primary, #ffffff);
+}
+
+.file-tree-content {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 8px 0;
+}
+
+.file-tree-content::-webkit-scrollbar {
+  width: 8px;
+}
+
+.file-tree-content::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.file-tree-content::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+}
+
+.file-tree-content::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.file-tree-loading,
+.file-tree-error,
+.file-tree-empty {
+  padding: 24px 16px;
+  text-align: center;
+  color: var(--text-secondary, #808080);
+  font-size: 13px;
+}
+
+.file-tree-error {
+  color: #ff6b6b;
+}
+
+.file-tree {
+  min-height: 100%;
+}
+
+.file-tree-node {
+  user-select: none;
+}
+
+.file-tree-item {
+  display: flex;
+  align-items: center;
+  padding: 4px 8px;
+  cursor: pointer;
+  transition: background 0.1s;
+  font-size: 13px;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.file-tree-item:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.file-tree-item.selected {
+  background: rgba(59, 130, 246, 0.2);
+  color: #60a5fa;
+}
+
+.file-tree-item.focused {
+  outline: 2px solid rgba(251, 191, 36, 0.5);
+  outline-offset: -2px;
+  background: rgba(251, 191, 36, 0.1);
+}
+
+.file-tree-item.focused:not(.selected) .file-name {
+  color: #fbbf24;
+}
+
+/* Focus within the container - hide default outline */
+.file-tree-content:focus {
+  outline: none;
+}
+
+.file-tree-chevron {
+  width: 14px;
+  height: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  color: var(--text-secondary, #606060);
+}
+
+.file-tree-chevron svg {
+  display: block;
+}
+
+.file-icon-wrapper {
+  margin: 0 6px;
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.file-icon {
+  width: 16px;
+  height: 16px;
+  display: block;
+}
+
+.file-icon.code {
+  color: #4ade80;
+}
+
+.file-icon.doc {
+  color: #60a5fa;
+}
+
+.file-icon.image {
+  color: #fbbf24;
+}
+
+.file-icon.archive {
+  color: #a78bfa;
+}
+
+.file-icon.json {
+  color: #f97316;
+}
+
+.file-tree-item.directory .file-icon-wrapper svg {
+  color: #fbbf24;
+}
+
+.file-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--text-primary, #ffffff);
+}
+
+.file-tree-item.directory .file-name {
+  font-weight: 500;
+}
+
+.file-tree-item.parent-directory {
+  background: rgba(100, 150, 255, 0.08);
+  border-bottom: 1px solid rgba(100, 150, 255, 0.15);
+  font-weight: 600;
+  color: #60a5fa;
+}
+
+.file-tree-item.parent-directory:hover {
+  background: rgba(100, 150, 255, 0.15);
+}
+
+.file-tree-item.parent-directory .file-tree-chevron {
+  color: #60a5fa;
+  font-size: 16px;
+  font-weight: bold;
+}
+
+.file-tree-item.parent-directory .file-icon-wrapper svg {
+  color: #60a5fa;
+}
+
+.file-tree-children {
+  position: relative;
+}
+
+.file-tree-selection {
+  padding: 12px 16px;
+  background: rgba(59, 130, 246, 0.1);
+  border-top: 1px solid rgba(59, 130, 246, 0.3);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.selection-label {
+  color: var(--text-secondary, #808080);
+  font-weight: 500;
+}
+
+.selection-value {
+  color: #60a5fa;
+  font-family: "Courier New", monospace;
+  font-weight: 600;
+}
+
+/* Dark theme adjustments */
+@media (prefers-color-scheme: dark) {
+  .file-tree-container {
+    background: #0a0a0a;
+  }
+
+  .file-tree-header {
+    background: rgba(255, 255, 255, 0.03);
+  }
+}
+
+/* Highlight flash animation for expandToPath */
+@keyframes highlight-pulse {
+  0% {
+    background-color: rgba(96, 165, 250, 0.3);
+  }
+  50% {
+    background-color: rgba(96, 165, 250, 0.1);
+  }
+  100% {
+    background-color: transparent;
+  }
+}
+
+.highlight-flash {
+  animation: highlight-pulse 1s ease-out;
+}

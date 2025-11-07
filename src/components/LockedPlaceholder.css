@@ -1,0 +1,36 @@
+/* Locked Placeholder Component Styles */
+
+.locked-placeholder {
+  user-select: none;
+  cursor: default;
+  transition: opacity 0.2s;
+}
+
+.locked-placeholder-terminal {
+  /* Terminal variant specific styles */
+}
+
+.locked-placeholder-card,
+.locked-placeholder-file-viewer,
+.locked-placeholder-session-manager {
+  /* Simple variant styles */
+}
+
+/* Subtle pulse animation to indicate locked state */
+@keyframes locked-pulse {
+  0%, 100% {
+    border-color: rgba(251, 191, 36, 0.5);
+  }
+  50% {
+    border-color: rgba(251, 191, 36, 0.8);
+  }
+}
+
+.locked-placeholder:hover {
+  animation: locked-pulse 2s ease-in-out infinite;
+}
+
+/* Ensure placeholder doesn't interfere with interactions */
+.locked-placeholder * {
+  pointer-events: none;
+}

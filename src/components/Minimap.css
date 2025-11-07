@@ -1,0 +1,181 @@
+.minimap-container {
+  position: relative; /* positioned by parent overlay */
+  background: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.1) 0%,
+    rgba(255, 255, 255, 0.05) 100%
+  );
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 12px;
+  padding: 10px;
+  backdrop-filter: blur(15px);
+  -webkit-backdrop-filter: blur(15px);
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.2),
+    0 0 40px rgba(255, 107, 53, 0.1),
+    inset 0 0 20px rgba(255, 255, 255, 0.03);
+  z-index: 1000;
+  transition:
+    transform 0.3s ease,
+    box-shadow 0.3s ease,
+    border-color 0.3s ease;
+  user-select: none;
+  overflow: hidden; /* Ensure resize handle doesn't overflow */
+}
+
+.minimap-container:hover {
+  transform: translateY(-2px);
+  border-color: rgba(255, 255, 255, 0.3);
+  box-shadow:
+    0 12px 40px rgba(0, 0, 0, 0.3),
+    0 0 60px rgba(255, 107, 53, 0.2),
+    inset 0 0 30px rgba(255, 255, 255, 0.05);
+}
+
+/* Resize handle styling */
+.minimap-resize-handle {
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.minimap-container:hover .minimap-resize-handle {
+  opacity: 1;
+}
+
+.minimap-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+  padding: 0 4px;
+}
+
+.minimap-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.9);
+  text-transform: uppercase;
+  letter-spacing: 1.2px;
+  text-shadow:
+    0 2px 4px rgba(0, 0, 0, 0.3),
+    0 0 10px rgba(255, 107, 53, 0.3);
+}
+
+.minimap-zoom {
+  font-size: 11px;
+  color: rgba(255, 200, 50, 0.9);
+  font-weight: 600;
+  font-family: "Courier New", monospace;
+  background: rgba(0, 0, 0, 0.2);
+  padding: 3px 8px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 200, 50, 0.4);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+}
+
+.minimap-canvas {
+  width: 100%;
+  height: 100%;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 8px;
+  cursor: crosshair;
+  background: linear-gradient(
+    135deg,
+    rgba(0, 0, 0, 0.2) 0%,
+    rgba(0, 0, 0, 0.1) 100%
+  );
+  transition: border-color 0.3s ease;
+  display: block;
+}
+
+.minimap-canvas:hover {
+  border-color: rgba(255, 107, 53, 0.6);
+}
+
+.minimap-canvas:active {
+  cursor: grabbing;
+}
+
+.minimap-info {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+.minimap-legend {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  align-items: center;
+  font-size: 10px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.8);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+}
+
+.legend-row {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+/* Collapsed state for minimap */
+.minimap-container.collapsed {
+  width: auto;
+  height: auto;
+  padding: 4px 8px;
+}
+
+.minimap-container.collapsed .minimap-canvas,
+.minimap-container.collapsed .minimap-info {
+  display: none;
+}
+
+.minimap-container.collapsed .minimap-header {
+  margin-bottom: 0;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .minimap-container {
+    width: 180px;
+  }
+}
+
+/* Animation for viewport rectangle updates */
+@keyframes pulse-viewport {
+  0% {
+    opacity: 0.6;
+  }
+  50% {
+    opacity: 0.9;
+  }
+  100% {
+    opacity: 0.6;
+  }
+}
+
+/* Hide minimap when sidebar is full width on mobile */
+@media (max-width: 640px) {
+  .minimap-container {
+    display: none;
+  }
+}
+
+.minimap-toggle {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: #fff;
+  padding: 2px 6px;
+  font-size: 12px;
+  border-radius: 4px;
+  cursor: pointer;
+}

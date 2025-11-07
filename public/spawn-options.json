@@ -1,0 +1,154 @@
+{
+  "spawnOptions": [
+    {
+      "label": "Claude Code",
+      "command": "claude",
+      "terminalType": "claude-code",
+      "icon": "🤖",
+      "description": "Claude Code (interactive mode)",
+      "defaultSize": { "width": 1200, "height": 800 },
+      "defaultTheme": "amber",
+      "defaultTransparency": 100
+    },
+    {
+      "label": "Claude (skip permissions)",
+      "command": "claude --dangerously-skip-permissions",
+      "terminalType": "claude-code",
+      "icon": "⚡",
+      "description": "Claude Code with no permission prompts",
+      "defaultSize": { "width": 1200, "height": 800 },
+      "defaultTheme": "amber",
+      "defaultTransparency": 100
+    },
+    {
+      "label": "OpenCode",
+      "command": "opencode",
+      "terminalType": "opencode",
+      "icon": "💜",
+      "description": "OpenCode AI assistant",
+      "defaultSize": { "width": 1200, "height": 800 },
+      "defaultTheme": "amber",
+      "defaultTransparency": 100
+    },
+    {
+      "label": "Codex",
+      "command": "codex",
+      "terminalType": "codex",
+      "icon": "📚",
+      "description": "Codex AI assistant",
+      "defaultSize": { "width": 1200, "height": 800 },
+      "defaultTheme": "amber",
+      "defaultTransparency": 100
+    },
+    {
+      "label": "Gemini",
+      "command": "gemini",
+      "terminalType": "gemini",
+      "icon": "♊",
+      "description": "Google Gemini AI",
+      "defaultSize": { "width": 1200, "height": 800 },
+      "defaultTheme": "amber",
+      "defaultTransparency": 100
+    },
+    {
+      "label": "Bash",
+      "command": "",
+      "terminalType": "bash",
+      "icon": "💻",
+      "description": "Plain bash terminal",
+      "defaultSize": { "width": 800, "height": 600 },
+      "defaultTheme": "matrix",
+      "defaultTransparency": 90
+    },
+    {
+      "label": "TFE",
+      "command": "tfe",
+      "terminalType": "bash",
+      "icon": "📁",
+      "description": "Terminal File Explorer",
+      "defaultSize": { "width": 900, "height": 700 },
+      "defaultTheme": "default",
+      "defaultTransparency": 95
+    },
+    {
+      "label": "Micro Editor",
+      "command": "micro",
+      "terminalType": "bash",
+      "icon": "📝",
+      "description": "Modern terminal text editor",
+      "defaultSize": { "width": 1000, "height": 700 },
+      "defaultTheme": "solarized-dark",
+      "defaultTransparency": 85
+    },
+    {
+      "label": "Vim",
+      "command": "vim",
+      "terminalType": "bash",
+      "icon": "✏️",
+      "description": "Vim text editor",
+      "defaultSize": { "width": 1000, "height": 700 },
+      "defaultTheme": "monokai",
+      "defaultTransparency": 85
+    },
+    {
+      "label": "Spotify Player",
+      "command": "export PULSE_SERVER=/mnt/wslg/PulseServer && ~/.cargo/bin/spotify_player",
+      "terminalType": "tui-tool",
+      "icon": "🎵",
+      "description": "Terminal Spotify player",
+      "defaultSize": { "width": 1000, "height": 600 },
+      "defaultTheme": "dracula",
+      "defaultTransparency": 95
+    },
+    {
+      "label": "Log Navigator",
+      "command": "lnav",
+      "terminalType": "bash",
+      "icon": "📜",
+      "description": "Advanced log file viewer",
+      "defaultSize": { "width": 1200, "height": 800 },
+      "defaultTheme": "monokai",
+      "defaultTransparency": 90
+    },
+    {
+      "label": "LazyGit",
+      "command": "lazygit",
+      "terminalType": "bash",
+      "icon": "🌿",
+      "description": "Terminal UI for git",
+      "defaultSize": { "width": 1200, "height": 800 },
+      "defaultTheme": "github-dark",
+      "defaultTransparency": 95
+    },
+    {
+      "label": "AIChat",
+      "command": "aichat",
+      "terminalType": "bash",
+      "icon": "💬",
+      "description": "All-in-one CLI for LLMs",
+      "defaultSize": { "width": 1000, "height": 700 },
+      "defaultTheme": "amber",
+      "defaultTransparency": 100
+    },
+    {
+      "label": "Htop",
+      "command": "htop",
+      "terminalType": "bash",
+      "icon": "📊",
+      "description": "Interactive process viewer",
+      "defaultSize": { "width": 900, "height": 600 },
+      "defaultTheme": "matrix",
+      "defaultTransparency": 95
+    },
+    {
+      "label": "Bottom",
+      "command": "bottom",
+      "terminalType": "bash",
+      "icon": "📈",
+      "description": "System monitor (bottom)",
+      "defaultSize": { "width": 900, "height": 600 },
+      "defaultTheme": "dracula",
+      "defaultTransparency": 95
+    }
+  ]
+}
