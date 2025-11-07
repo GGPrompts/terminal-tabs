@@ -1,0 +1,200 @@
+# CLAUDE.md - Terminal Tabs
+
+## 🎯 Project Overview
+
+Terminal Tabs is a **lightweight, tab-based terminal interface** for the web. Built with React, TypeScript, and xterm.js, it provides a simple alternative to complex canvas-based terminal managers.
+
+**Version**: 1.0.0
+**Status**: MVP Complete
+**Architecture**: Tab-based UI with WebSocket terminal backend
+**Extracted from**: [Opustrator](https://github.com/GGPrompts/opustrator) v3.14.2
+
+---
+
+## 🏗️ Architecture
+
+### Frontend (React + TypeScript + Vite)
+```
+src/
+├── SimpleTerminalApp.tsx       # Main app with tab bar
+├── components/
+│   └── Terminal.tsx            # xterm.js terminal component
+├── stores/
+│   ├── simpleTerminalStore.ts  # Zustand store (terminals array)
+│   └── useSettingsStore.ts     # Global settings
+├── services/
+│   └── SimpleSpawnService.ts   # Minimal spawning service
+├── styles/
+│   └── terminal-themes.ts      # 14 terminal themes
+└── types.ts                    # Shared TypeScript types
+```
+
+### Backend (Node.js + Express + PTY)
+```
+backend/
+├── server.js                   # Express + WebSocket server
+├── modules/
+│   ├── terminal-registry.js    # Terminal state management
+│   ├── pty-handler.js          # PTY process spawning
+│   └── unified-spawn.js        # Terminal spawning logic
+└── routes/
+    └── api.js                  # REST API endpoints
+```
+
+### Communication
+- **WebSocket**: Real-time terminal I/O
+- **REST API**: Terminal management, file operations
+
+---
+
+## 🎨 Core Principles
+
+1. **Simplicity Over Features** - Minimal, focused functionality
+2. **Tab-Based Only** - No canvas, no dragging, no zoom complexity
+3. **Fast & Lightweight** - ~74 npm packages (vs 200+ in Opustrator)
+4. **Mobile-Friendly** - Works on tablets/phones (future goal)
+5. **Easy to Deploy** - Frontend (Vercel/Netlify) + Backend (any VPS)
+
+---
+
+## 📐 Development Rules
+
+### ALWAYS:
+1. **Keep It Simple** - If it adds complexity, think twice
+2. **Test Terminal Types** - Verify Claude Code, Bash, TFE work
+3. **Mobile-First CSS** - Use responsive design patterns
+4. **Document Changes** - Update README.md and this file
+5. **No Canvas Code** - This is the tab-based version, no dragging/zoom
+
+### NEVER:
+1. **Don't Add Canvas Features** - Dragging, resizing, zoom, pan = NO
+2. **Don't Import from Opustrator Canvas Code** - Keep it independent
+3. **Don't Over-Engineer** - Simple solutions win
+4. **Don't Break WebSocket Protocol** - Backend compatibility is critical
+
+---
+
+## 🚀 Key Features (MVP Complete)
+
+✅ **Tab-Based Interface** - Browser-style tabs for terminals
+✅ **15 Terminal Types** - Claude Code, Bash, TFE, LazyGit, etc.
+✅ **Full Terminal Emulation** - xterm.js with WebGL rendering
+✅ **WebSocket Communication** - Real-time I/O
+✅ **Theme System** - 14 themes with aliases (amber, matrix, etc.)
+✅ **Spawn Menu** - Right-click spawn with 15 options
+✅ **Connection Status** - WebSocket connection indicator
+
+---
+
+## 📋 Current State
+
+### What Works
+- Spawning terminals (Claude Code, Bash, TFE tested)
+- Tab switching
+- Terminal I/O (keyboard input, output display)
+- WebSocket auto-reconnect
+- Basic styling (glassmorphic panels)
+- Spawn menu with 15 terminal types
+
+### What Needs Work
+- Tab persistence across refresh (localStorage)
+- Keyboard shortcuts (Ctrl+T, Ctrl+W, Ctrl+Tab)
+- Tab reordering (drag tabs)
+- Mobile responsiveness
+- Settings modal
+- Split panes (future)
+
+---
+
+## 🔧 Configuration
+
+### spawn-options.json
+Located at `public/spawn-options.json` - defines available terminal types:
+
+```json
+{
+  "spawnOptions": [
+    {
+      "label": "Claude Code",
+      "command": "claude",
+      "terminalType": "claude-code",
+      "icon": "🤖",
+      "description": "Claude Code (interactive mode)",
+      "defaultSize": { "width": 1200, "height": 800 },
+      "defaultTheme": "amber",
+      "defaultTransparency": 100
+    }
+  ]
+}
+```
+
+### Theme Aliases
+Use intuitive aliases in spawn-options:
+- `amber` → Retro Amber (orange monochrome)
+- `green` → Matrix Rain (green on black)
+- `purple` → Cyberpunk Neon
+- `pink` → Vaporwave Dreams
+- `blue` → Holographic
+- `ocean` → Deep Ocean
+- `dark` → GitHub Dark
+
+---
+
+## 🐛 Known Issues
+
+1. **No Tab Persistence** - Tabs disappear on refresh (need localStorage)
+2. **No Keyboard Shortcuts** - Missing Ctrl+T, Ctrl+W, etc.
+3. **Mobile Untested** - May need responsive CSS work
+4. **No Settings UI** - spawn-options.json must be edited manually
+5. **Single Window** - Can't pop out tabs (future: window.open())
+
+---
+
+## 📊 Project Metrics
+
+| Metric | Value |
+|--------|-------|
+| Dependencies | 74 packages |
+| Lines of Code | ~44,000 |
+| Frontend Size | ~200KB gzipped |
+| Backend Port | 8127 |
+| Terminal Types | 15 |
+| Themes | 14 |
+
+---
+
+## 🎯 Design Goals
+
+### Primary Goals
+1. **Easy to Use** - Spawn terminal, start typing
+2. **Fast** - Instant spawning, no lag
+3. **Reliable** - WebSocket auto-reconnect, error recovery
+4. **Beautiful** - Modern glassmorphic UI, smooth animations
+
+### Non-Goals
+1. **Canvas Features** - No dragging, resizing, zoom
+2. **Infinite Workspace** - Tabs only, not spatial
+3. **Complex Layouts** - Keep it simple
+4. **Desktop PWA** - Web-first, not Electron
+
+---
+
+## 🔗 Links
+
+- **GitHub**: https://github.com/GGPrompts/terminal-tabs
+- **Parent Project**: https://github.com/GGPrompts/opustrator
+- **xterm.js Docs**: https://xtermjs.org/
+
+---
+
+## 📝 Notes for AI Assistants
+
+- This project was extracted from Opustrator to create a simpler tab-based version
+- The backend is shared with Opustrator (same WebSocket protocol)
+- Focus on simplicity - no canvas features should be added
+- Test spawning terminals after changes (Bash, TFE, Claude Code)
+- Keep dependencies minimal - avoid adding new npm packages
+
+---
+
+**Last Updated**: November 7, 2025
