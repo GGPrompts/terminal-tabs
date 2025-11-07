@@ -5,6 +5,7 @@ export interface Terminal {
   id: string;
   name: string;
   terminalType: string;
+  icon?: string;
   agentId?: string;
   workingDir?: string;
   theme?: string;

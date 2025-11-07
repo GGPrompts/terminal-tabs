@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react'
 import './SimpleTerminalApp.css'
 import { Terminal } from './components/Terminal'
-import { Agent, TERMINAL_TYPES } from './App'
+import { Agent, TERMINAL_TYPES } from './types'
 import { useSimpleTerminalStore, Terminal as StoredTerminal } from './stores/simpleTerminalStore'
-import UnifiedSpawnService from './services/UnifiedSpawnService'
+import SimpleSpawnService from './services/SimpleSpawnService'
 
 interface SpawnOption {
   label: string
@@ -64,16 +64,10 @@ function SimpleTerminalApp() {
 
   // Load spawn options
   useEffect(() => {
-    // TEMPORARY: Clear localStorage on mount for fresh start
-    localStorage.clear()
-    console.log('🧹 Cleared localStorage for fresh start')
-
-    console.log('📋 Loading spawn options...')
     fetch('/spawn-options.json')
       .then(res => res.json())
       .then(data => {
         if (data.spawnOptions) {
-          console.log('✅ Loaded', data.spawnOptions.length, 'spawn options:', data.spawnOptions)
           setSpawnOptions(data.spawnOptions)
         }
       })
@@ -82,7 +76,7 @@ function SimpleTerminalApp() {
 
   // Initialize WebSocket
   useEffect(() => {
-    UnifiedSpawnService.initialize(wsRef)
+    SimpleSpawnService.initialize(wsRef)
     connectWebSocket()
 
     return () => {
@@ -99,6 +93,93 @@ function SimpleTerminalApp() {
       }
     }
   }, [])
+
+  // Track last closed terminal for Ctrl+Shift+T
+  const lastClosedTerminalRef = useRef<{ terminalType: string; icon?: string; name: string } | null>(null)
+
+  // Handle keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Escape key to close spawn menu
+      if (e.key === 'Escape' && showSpawnMenu) {
+        setShowSpawnMenu(false)
+        return
+      }
+
+      // Ctrl+T - New terminal (show spawn menu)
+      if (e.ctrlKey && e.key === 't') {
+        e.preventDefault()
+        setShowSpawnMenu(prev => !prev)
+        return
+      }
+
+      // Ctrl+W - Close active tab
+      if (e.ctrlKey && e.key === 'w') {
+        e.preventDefault()
+        if (activeTerminalId) {
+          const terminal = storedTerminals.find(t => t.id === activeTerminalId)
+          if (terminal) {
+            lastClosedTerminalRef.current = {
+              terminalType: terminal.terminalType,
+              icon: terminal.icon,
+              name: terminal.name,
+            }
+          }
+          handleCloseTerminal(activeTerminalId)
+        }
+        return
+      }
+
+      // Ctrl+Tab - Next tab
+      if (e.ctrlKey && e.key === 'Tab' && !e.shiftKey) {
+        e.preventDefault()
+        if (storedTerminals.length > 0) {
+          const currentIndex = storedTerminals.findIndex(t => t.id === activeTerminalId)
+          const nextIndex = (currentIndex + 1) % storedTerminals.length
+          setActiveTerminal(storedTerminals[nextIndex].id)
+        }
+        return
+      }
+
+      // Ctrl+Shift+Tab - Previous tab
+      if (e.ctrlKey && e.shiftKey && e.key === 'Tab') {
+        e.preventDefault()
+        if (storedTerminals.length > 0) {
+          const currentIndex = storedTerminals.findIndex(t => t.id === activeTerminalId)
+          const prevIndex = currentIndex <= 0 ? storedTerminals.length - 1 : currentIndex - 1
+          setActiveTerminal(storedTerminals[prevIndex].id)
+        }
+        return
+      }
+
+      // Ctrl+Shift+T - Reopen last closed tab
+      if (e.ctrlKey && e.shiftKey && e.key === 'T') {
+        e.preventDefault()
+        if (lastClosedTerminalRef.current) {
+          const spawnOption = spawnOptions.find(
+            opt => opt.terminalType === lastClosedTerminalRef.current!.terminalType
+          )
+          if (spawnOption) {
+            handleSpawnTerminal(spawnOption)
+          }
+        }
+        return
+      }
+
+      // Ctrl+1-9 - Jump to tab N
+      if (e.ctrlKey && e.key >= '1' && e.key <= '9') {
+        e.preventDefault()
+        const tabIndex = parseInt(e.key) - 1
+        if (tabIndex < storedTerminals.length) {
+          setActiveTerminal(storedTerminals[tabIndex].id)
+        }
+        return
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [showSpawnMenu, activeTerminalId, storedTerminals, spawnOptions])
 
   const connectWebSocket = () => {
     if (reconnectTimeoutRef.current) {
@@ -166,7 +247,6 @@ function SimpleTerminalApp() {
   }
 
   const handleWebSocketMessage = (message: any) => {
-    console.log('📨 WS Message received:', message.type, message)
     switch (message.type) {
       case 'terminal-spawned':
         if (message.data) {
@@ -192,13 +272,30 @@ function SimpleTerminalApp() {
           })
 
           // Check if this agent already has a stored terminal
-          const existingTerminal = storedTerminals.find(t => t.agentId === message.data.id)
+          let existingTerminal = storedTerminals.find(t => t.agentId === message.data.id)
+
+          // If not found by agentId, find the most recent spawning terminal of same type
           if (!existingTerminal) {
-            // Create new stored terminal
+            existingTerminal = storedTerminals
+              .filter(t => t.status === 'spawning' && t.terminalType === message.data.terminalType)
+              .sort((a, b) => b.createdAt - a.createdAt)[0]
+          }
+
+          if (existingTerminal) {
+            // Update existing terminal with agent info
+            updateTerminal(existingTerminal.id, {
+              agentId: message.data.id,
+              sessionName: message.data.sessionName,
+              status: 'active',
+            })
+          } else {
+            // Fallback: create new terminal if none found (shouldn't happen normally)
+            const spawnOption = spawnOptions.find(opt => opt.terminalType === message.data.terminalType)
             const newTerminal: StoredTerminal = {
               id: `terminal-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
               name: message.data.name || message.data.terminalType,
               terminalType: message.data.terminalType,
+              icon: spawnOption?.icon,
               agentId: message.data.id,
               workingDir: message.data.workingDir,
               sessionName: message.data.sessionName,
@@ -206,23 +303,12 @@ function SimpleTerminalApp() {
               status: 'active',
             }
             addTerminal(newTerminal)
-          } else {
-            // Update existing terminal
-            updateTerminal(existingTerminal.id, {
-              agentId: message.data.id,
-              status: 'active',
-            })
           }
         }
         break
 
       case 'terminal-output':
         if (message.terminalId && message.data) {
-          console.log('📤 Dispatching terminal-output event:', {
-            terminalId: message.terminalId,
-            dataLength: message.data.length,
-            activeAgent: activeAgent?.id,
-          })
           // Dispatch custom event for Terminal component to handle
           window.dispatchEvent(new CustomEvent('terminal-output', {
             detail: {
@@ -251,8 +337,21 @@ function SimpleTerminalApp() {
   }
 
   const handleSpawnTerminal = async (option: SpawnOption) => {
-    console.log('🚀 handleSpawnTerminal called with:', option)
     setShowSpawnMenu(false)
+
+    // Create terminal with 'spawning' status immediately for better UX
+    const newTerminal: StoredTerminal = {
+      id: `terminal-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      name: option.label,
+      terminalType: option.terminalType,
+      icon: option.icon,
+      workingDir: '/home/matt',
+      theme: option.defaultTheme,
+      transparency: option.defaultTransparency,
+      createdAt: Date.now(),
+      status: 'spawning',
+    }
+    addTerminal(newTerminal)
 
     try {
       const config = {
@@ -264,16 +363,17 @@ function SimpleTerminalApp() {
         size: option.defaultSize || { width: 800, height: 600 },
       }
 
-      // UnifiedSpawnService.spawn() returns Promise<string | null> (terminal ID)
-      const terminalId = await UnifiedSpawnService.spawn({ config })
+      // SimpleSpawnService.spawn() returns Promise<string | null> (terminal ID)
+      const terminalId = await SimpleSpawnService.spawn({ config })
 
-      if (terminalId) {
-        console.log('✅ Terminal spawned successfully:', terminalId)
-      } else {
+      if (!terminalId) {
         console.error('❌ Failed to spawn terminal')
+        updateTerminal(newTerminal.id, { status: 'error' })
       }
+      // Status will be updated to 'active' when WebSocket receives terminal-spawned
     } catch (error) {
       console.error('❌ Error spawning terminal:', error)
+      updateTerminal(newTerminal.id, { status: 'error' })
     }
   }
 
@@ -327,11 +427,11 @@ function SimpleTerminalApp() {
         {storedTerminals.map(terminal => (
           <div
             key={terminal.id}
-            className={`tab ${terminal.id === activeTerminalId ? 'active' : ''}`}
+            className={`tab ${terminal.id === activeTerminalId ? 'active' : ''} ${terminal.status === 'spawning' ? 'spawning' : ''}`}
             onClick={() => setActiveTerminal(terminal.id)}
           >
             <span className="tab-icon">
-              {TERMINAL_TYPES.find(t => t.value === terminal.terminalType)?.icon || '💻'}
+              {terminal.status === 'spawning' ? '⏳' : (terminal.icon || TERMINAL_TYPES.find(t => t.value === terminal.terminalType)?.icon || '💻')}
             </span>
             <span className="tab-label">{terminal.name}</span>
             <button

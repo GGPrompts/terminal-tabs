@@ -12,7 +12,7 @@ import { WebglAddon } from "@xterm/addon-webgl";
 import { Unicode11Addon } from "@xterm/addon-unicode11";
 import "@xterm/xterm/css/xterm.css";
 import "./Terminal.css";
-import { Agent, TERMINAL_TYPES } from "../App";
+import { Agent, TERMINAL_TYPES } from "../types";
 import {
   getThemeForTerminalType,
   getTerminalClassName,
@@ -526,7 +526,6 @@ export const Terminal = React.forwardRef<any, TerminalProps>(
       const dataHandler = xterm.onData((data) => {
         // Send all input directly to backend
         if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-          console.log(`[Terminal] 📤 Sending input to backend, terminalId: ${agent.id}, data length: ${data.length}`);
           wsRef.current.send(
             JSON.stringify({
               type: "command",
@@ -672,7 +671,6 @@ export const Terminal = React.forwardRef<any, TerminalProps>(
         try {
           const parent = terminalRef.current?.parentElement;
           if (parent && parent.clientWidth > 0 && parent.clientHeight > 0) {
-            console.log('[Terminal] Hot refresh detected - forcing fit for', agent.id);
             fitAddonRef.current?.fit();
             xtermRef.current?.refresh(0, xtermRef.current.rows - 1);
 
@@ -745,14 +743,12 @@ export const Terminal = React.forwardRef<any, TerminalProps>(
       // Listen for container resize events dispatched by wrapper to refit columns precisely
       const handleContainerResized = (e: CustomEvent) => {
         if (e.detail.id === agent.id && fitAddonRef.current) {
-          console.log(`[Terminal] Received resize event for ${agent.id}`);
           // Small timeout allows DOM layout to settle
           requestAnimationFrame(() => {
             try {
               fitAddonRef.current!.fit();
               const cols = xtermRef.current?.cols || 0;
               const rows = xtermRef.current?.rows || 0;
-              console.log(`[Terminal] After fit: ${cols}x${rows} for ${agent.id}`);
 
               // After a fit, send exact cols/rows to backend so PTY wraps correctly
               if (
@@ -760,7 +756,6 @@ export const Terminal = React.forwardRef<any, TerminalProps>(
                 wsRef.current.readyState === WebSocket.OPEN &&
                 xtermRef.current
               ) {
-                console.log(`[Terminal] Sending resize to backend: ${cols}x${rows}`);
                 wsRef.current.send(
                   JSON.stringify({
                     type: "resize",
