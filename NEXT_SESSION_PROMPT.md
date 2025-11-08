@@ -611,6 +611,41 @@ Current footer layout is awkward on ultra-wide screens:
 
 ---
 
+## 💡 Future Feature Idea: Send Keys Integration
+
+### Prompt Engineer → Claude Code Automation
+
+**User's workflow:**
+- `/prompt-engineer` slash command iterates on prompts with haiku agents
+- Refine, add context, web search, iterate unlimited times
+- Final step: Currently copies to clipboard
+- **Desired**: Send directly to Claude Code tab (automation!)
+
+**Implementation:**
+- Add `POST /api/tmux/send-keys` endpoint
+- Send text to specific terminal session
+- Optional auto-execute (press Enter) or user confirmation
+
+**Safety (Critical - User has nuked PC before with AI "security testing"):**
+- ✅ Requires `ALLOW_SEND_KEYS=true` in backend/.env
+- ✅ Safety mode toggle (Safe/Fast/Danger)
+- ✅ Blocked patterns (rm -rf /, fork bombs, etc.)
+- ✅ Confirmation dialogs for destructive commands
+- ✅ Audit logging to .logs/send-keys-history.log
+- ✅ Emergency kill switch (tmux kill-session -t tt-*)
+
+**See:** `SEND_KEYS_SAFETY.md` for complete safety documentation
+
+**Enables:**
+- Multi-agent orchestration (Tab 1 → Tab 2 → Tab 3)
+- Automated workflows (research → write → edit)
+- AI agent collaboration across tabs
+- All the power of tmux send-keys with guardrails
+
+**Estimate:** 2-3 hours (endpoint + UI + safety checks)
+
+---
+
 ## 📊 What's Done vs What's Left
 
 ### ✅ COMPLETED (Core Functionality)
