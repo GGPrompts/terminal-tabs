@@ -797,13 +797,27 @@ function SimpleTerminalApp() {
     if (!activeTerminal || !terminalRef.current) return
 
     // Find the spawn option for this terminal
-    const spawnOption = spawnOptions.find(opt =>
-      opt.label === activeTerminal.name ||
-      opt.terminalType === activeTerminal.terminalType
-    )
+    // First try to match by label (exact match)
+    let spawnOption = spawnOptions.find(opt => opt.label === activeTerminal.name)
+
+    // Fallback: if no exact label match, try matching by terminalType + command
+    if (!spawnOption && activeTerminal.command) {
+      spawnOption = spawnOptions.find(opt =>
+        opt.terminalType === activeTerminal.terminalType &&
+        opt.command === activeTerminal.command
+      )
+    }
+
+    // Last resort: just match by terminalType (but warn, as this might be wrong)
+    if (!spawnOption) {
+      spawnOption = spawnOptions.find(opt => opt.terminalType === activeTerminal.terminalType)
+      if (spawnOption) {
+        console.warn(`[SimpleTerminalApp] Could not find exact match for terminal "${activeTerminal.name}", using first ${activeTerminal.terminalType} option: ${spawnOption.label}`)
+      }
+    }
 
     if (!spawnOption) {
-      console.warn('No spawn option found for terminal:', activeTerminal.name)
+      console.warn('No spawn option found for terminal:', activeTerminal.name, activeTerminal.terminalType)
       return
     }
 
@@ -826,7 +840,7 @@ function SimpleTerminalApp() {
     if (defaults.fontSize) terminalRef.current.updateFontSize(defaults.fontSize)
     if (defaults.fontFamily) terminalRef.current.updateFontFamily(defaults.fontFamily)
 
-    console.log(`[SimpleTerminalApp] Reset terminal "${activeTerminal.name}" to spawn-option defaults`)
+    console.log(`[SimpleTerminalApp] Reset terminal "${activeTerminal.name}" to spawn-option defaults from "${spawnOption.label}"`, defaults)
   }
 
   const handleThemeChange = (theme: string) => {

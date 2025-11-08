@@ -1,6 +1,19 @@
 {
   "spawnOptions": [
     {
+      "label": "TUI Classic Games",
+      "command": "./classics",
+      "terminalType": "bash",
+      "icon": "🎮",
+      "description": "",
+      "workingDir": "~/projects/TUIClassics/bin",
+      "defaultTheme": "matrix",
+      "defaultBackground": "pure-black",
+      "defaultTransparency": 100,
+      "defaultFontFamily": "monospace",
+      "defaultFontSize": 18
+    },
+    {
       "label": "Bash",
       "command": "",
       "terminalType": "bash",
@@ -17,7 +30,10 @@
       "icon": "📁",
       "description": "Terminal File Explorer",
       "defaultTheme": "default",
-      "defaultTransparency": 95
+      "defaultTransparency": 95,
+      "defaultFontSize": 16,
+      "defaultFontFamily": "'Fira Code', monospace",
+      "defaultBackground": "synthwave-sunset"
     },
     {
       "label": "Tmuxplexer",

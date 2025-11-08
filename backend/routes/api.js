@@ -851,7 +851,7 @@ router.post('/console-log', asyncHandler(async (req, res) => {
     return res.status(400).json({ error: 'Expected logs array' });
   }
 
-  const logger = require('../modules/logger');
+  const { logger } = require('../modules/logger');
 
   logs.forEach(({ level, message, source, timestamp }) => {
     // Format: [Browser] [source] message

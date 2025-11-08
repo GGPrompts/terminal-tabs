@@ -22,13 +22,33 @@ interface SettingsModalProps {
   onSave: () => void
 }
 
+// Curated emoji icons for terminal spawn options
+const ICON_OPTIONS = [
+  '💻', '🖥️', '⌨️', '🖱️', // Computers & Peripherals
+  '🤖', '🧠', '👾', '🎮', // AI & Tech
+  '📁', '📂', '📄', '📝', // Files
+  '⚡', '🔥', '💎', '⭐', // Energy & Quality
+  '🚀', '🛸', '🌌', '🌠', // Space
+  '🎨', '🎭', '🎪', '🎯', // Arts & Goals
+  '🔧', '⚙️', '🔨', '🛠️', // Tools
+  '🐚', '🐧', '🐍', '🦀', // Shell & Languages
+  '📊', '📈', '📉', '💹', // Data & Charts
+  '🔒', '🔓', '🔑', '🛡️', // Security
+  '🌐', '🌍', '🗺️', '📡', // Network & World
+  '⏱️', '⏰', '⌛', '⏳', // Time
+]
+
 export function SettingsModal({ isOpen, onClose, onSave }: SettingsModalProps) {
   const [spawnOptions, setSpawnOptions] = useState<SpawnOption[]>([])
+  const [originalOptions, setOriginalOptions] = useState<SpawnOption[]>([]) // Track original state
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [isAdding, setIsAdding] = useState(false)
   const [editingIndex, setEditingIndex] = useState<number | null>(null)
+  const [showIconPicker, setShowIconPicker] = useState(false)
+  const [draggedIndex, setDraggedIndex] = useState<number | null>(null)
+  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null)
   const [formData, setFormData] = useState<SpawnOption>({
     label: '',
     command: '',
@@ -49,6 +69,20 @@ export function SettingsModal({ isOpen, onClose, onSave }: SettingsModalProps) {
     }
   }, [isOpen])
 
+  // Close icon picker when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      const target = e.target as HTMLElement
+      if (showIconPicker && !target.closest('.icon-picker-wrapper')) {
+        setShowIconPicker(false)
+      }
+    }
+    if (showIconPicker) {
+      document.addEventListener('mousedown', handleClickOutside)
+      return () => document.removeEventListener('mousedown', handleClickOutside)
+    }
+  }, [showIconPicker])
+
   const loadSpawnOptions = async () => {
     setIsLoading(true)
     setError(null)
@@ -57,6 +91,7 @@ export function SettingsModal({ isOpen, onClose, onSave }: SettingsModalProps) {
       const result = await response.json()
       if (result.success) {
         setSpawnOptions(result.data)
+        setOriginalOptions(JSON.parse(JSON.stringify(result.data))) // Deep copy for comparison
       } else {
         setError('Failed to load spawn options')
       }
@@ -64,6 +99,22 @@ export function SettingsModal({ isOpen, onClose, onSave }: SettingsModalProps) {
       setError('Network error: ' + (err as Error).message)
     } finally {
       setIsLoading(false)
+    }
+  }
+
+  // Check if there are unsaved changes
+  const hasUnsavedChanges = () => {
+    return JSON.stringify(spawnOptions) !== JSON.stringify(originalOptions)
+  }
+
+  // Handle close with unsaved changes warning
+  const handleClose = () => {
+    if (hasUnsavedChanges()) {
+      if (confirm('You have unsaved changes. Are you sure you want to close without saving?')) {
+        onClose()
+      }
+    } else {
+      onClose()
     }
   }
 
@@ -159,16 +210,69 @@ export function SettingsModal({ isOpen, onClose, onSave }: SettingsModalProps) {
     })
     setIsAdding(false)
     setEditingIndex(null)
+    setShowIconPicker(false)
+  }
+
+  const handleIconSelect = (icon: string) => {
+    setFormData({ ...formData, icon })
+    setShowIconPicker(false)
+  }
+
+  // Drag and drop handlers
+  const handleDragStart = (e: React.DragEvent, index: number) => {
+    setDraggedIndex(index)
+    e.dataTransfer.effectAllowed = 'move'
+    // Add a subtle opacity to the dragged element
+    ;(e.target as HTMLElement).style.opacity = '0.5'
+  }
+
+  const handleDragEnd = (e: React.DragEvent) => {
+    ;(e.target as HTMLElement).style.opacity = '1'
+    setDraggedIndex(null)
+    setDragOverIndex(null)
+  }
+
+  const handleDragOver = (e: React.DragEvent, index: number) => {
+    e.preventDefault() // Allow drop
+    e.dataTransfer.dropEffect = 'move'
+
+    if (draggedIndex !== null && draggedIndex !== index) {
+      setDragOverIndex(index)
+    }
+  }
+
+  const handleDragLeave = () => {
+    setDragOverIndex(null)
+  }
+
+  const handleDrop = (e: React.DragEvent, dropIndex: number) => {
+    e.preventDefault()
+
+    if (draggedIndex === null || draggedIndex === dropIndex) {
+      setDragOverIndex(null)
+      return
+    }
+
+    const updated = [...spawnOptions]
+    const draggedItem = updated[draggedIndex]
+
+    // Remove from old position
+    updated.splice(draggedIndex, 1)
+    // Insert at new position
+    updated.splice(dropIndex, 0, draggedItem)
+
+    setSpawnOptions(updated)
+    setDragOverIndex(null)
   }
 
   if (!isOpen) return null
 
   return (
-    <div className="settings-modal-overlay" onClick={onClose}>
+    <div className="settings-modal-overlay" onClick={handleClose}>
       <div className="settings-modal" onClick={(e) => e.stopPropagation()}>
         <div className="settings-header">
           <h2>⚙️ Spawn Options Manager</h2>
-          <button className="close-btn" onClick={onClose}>✕</button>
+          <button className="close-btn" onClick={handleClose}>✕</button>
         </div>
 
         {error && <div className="error-message">{error}</div>}
@@ -187,7 +291,17 @@ export function SettingsModal({ isOpen, onClose, onSave }: SettingsModalProps) {
 
               <div className="options-list">
                 {spawnOptions.map((option, index) => (
-                  <div key={index} className="option-item">
+                  <div
+                    key={index}
+                    className={`option-item ${dragOverIndex === index ? 'drag-over' : ''} ${draggedIndex === index ? 'dragging' : ''}`}
+                    draggable
+                    onDragStart={(e) => handleDragStart(e, index)}
+                    onDragEnd={handleDragEnd}
+                    onDragOver={(e) => handleDragOver(e, index)}
+                    onDragLeave={handleDragLeave}
+                    onDrop={(e) => handleDrop(e, index)}
+                  >
+                    <div className="option-drag-handle" title="Drag to reorder">⋮⋮</div>
                     <div className="option-main">
                       <span className="option-icon">{option.icon}</span>
                       <div className="option-details">
@@ -238,7 +352,7 @@ export function SettingsModal({ isOpen, onClose, onSave }: SettingsModalProps) {
               </div>
 
               <div className="settings-footer">
-                <button className="cancel-btn" onClick={onClose}>
+                <button className="cancel-btn" onClick={handleClose}>
                   Cancel
                 </button>
                 <button
@@ -266,13 +380,31 @@ export function SettingsModal({ isOpen, onClose, onSave }: SettingsModalProps) {
                 </label>
                 <label>
                   Icon
-                  <input
-                    type="text"
-                    value={formData.icon}
-                    onChange={(e) => setFormData({ ...formData, icon: e.target.value })}
-                    placeholder="🤖"
-                    maxLength={2}
-                  />
+                  <div className="icon-picker-wrapper">
+                    <button
+                      type="button"
+                      className="icon-picker-trigger"
+                      onClick={() => setShowIconPicker(!showIconPicker)}
+                    >
+                      <span className="selected-icon">{formData.icon}</span>
+                      <span className="picker-arrow">▼</span>
+                    </button>
+                    {showIconPicker && (
+                      <div className="icon-picker-dropdown">
+                        {ICON_OPTIONS.map((icon) => (
+                          <button
+                            key={icon}
+                            type="button"
+                            className={`icon-option ${formData.icon === icon ? 'selected' : ''}`}
+                            onClick={() => handleIconSelect(icon)}
+                            title={icon}
+                          >
+                            {icon}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 </label>
               </div>
 
