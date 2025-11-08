@@ -95,13 +95,14 @@ backend/
 - WebSocket auto-reconnect
 - Basic styling (glassmorphic panels)
 - Spawn menu with 15 terminal types
+- **Tab persistence** - Terminals persist through refresh with tmux sessions
+- **Per-tab customization** - Font size, theme, transparency persist per tab
+- **Conditional scrollbar** - Hidden with tmux (default), visible without
 
 ### What Needs Work
-- Tab persistence across refresh (localStorage)
 - Keyboard shortcuts (Ctrl+T, Ctrl+W, Ctrl+Tab)
 - Tab reordering (drag tabs)
-- Mobile responsiveness
-- Settings modal
+- Mobile responsiveness improvements
 - Split panes (future)
 
 ---
@@ -142,10 +143,47 @@ Use intuitive aliases in spawn-options:
 
 ## 🐛 Known Issues
 
-1. **No Tab Persistence** - Tabs disappear on refresh (need localStorage)
-2. **No Keyboard Shortcuts** - Missing Ctrl+T, Ctrl+W, etc.
-3. **Mobile Untested** - May need responsive CSS work
-4. **Single Window** - Can't pop out tabs (future: window.open())
+1. **No Keyboard Shortcuts** - Missing Ctrl+T, Ctrl+W, etc.
+2. **Mobile Untested** - May need responsive CSS work
+3. **Single Window** - Can't pop out tabs (future: window.open())
+
+## ✅ Recently Fixed (Nov 8, 2025)
+
+### Terminal Persistence Implementation
+**The Critical Fix:** xterm.js requires non-zero container dimensions to initialize properly.
+
+**Problem:** Using `display: none` to hide inactive tabs prevented xterm.js from initializing on those terminals. After refresh, only the currently active tab would render - all others showed emoji icons but blank terminal areas.
+
+**Solution (from Opustrator):**
+```tsx
+// OLD (broken):
+style={{ display: terminal.id === activeTerminalId ? 'block' : 'none' }}
+
+// NEW (working):
+style={{
+  position: 'absolute',
+  top: 0, left: 0, right: 0, bottom: 0,
+  visibility: terminal.id === activeTerminalId ? 'visible' : 'hidden',
+  zIndex: terminal.id === activeTerminalId ? 1 : 0,
+}}
+```
+
+**Why this works:**
+- All terminals render with full dimensions (stacked via absolute positioning)
+- xterm.js can initialize properly on all terminals
+- `visibility: hidden` hides inactive terminals without removing dimensions
+- `isSelected` prop triggers Terminal.tsx refresh when tab becomes active (lines 870-886)
+
+**Additional fixes:**
+- Conditional scrollbar based on `useTmux` setting (tmux: hidden, non-tmux: visible with 10k scrollback)
+- Footer customizations now properly persist per-tab through localStorage
+- Spawn options modal shows default font size (16px) when editing options
+
+**Files Modified:**
+- `src/SimpleTerminalApp.tsx` (lines 949-981) - Absolute positioning + visibility
+- `src/components/Terminal.tsx` (lines 78, 183) - Conditional scrollback
+- `src/components/Terminal.css` (lines 151-186) - Conditional scrollbar styling
+- `src/components/SettingsModal.tsx` (lines 111-123) - Default font size display
 
 ## ✅ Recently Fixed (Nov 7, 2025)
 
@@ -207,4 +245,4 @@ See PLAN.md for detailed technical documentation of these fixes.
 
 ---
 
-**Last Updated**: November 7, 2025
+**Last Updated**: November 8, 2025

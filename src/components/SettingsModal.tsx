@@ -109,7 +109,15 @@ export function SettingsModal({ isOpen, onClose, onSave }: SettingsModalProps) {
   }
 
   const handleEditOption = (index: number) => {
-    setFormData(spawnOptions[index])
+    const option = spawnOptions[index]
+    // Fill in global defaults for any undefined fields
+    setFormData({
+      ...option,
+      defaultFontSize: option.defaultFontSize ?? 16, // Use global default if not set
+      defaultFontFamily: option.defaultFontFamily ?? 'monospace',
+      defaultTheme: option.defaultTheme ?? 'default',
+      defaultTransparency: option.defaultTransparency ?? 100,
+    })
     setEditingIndex(index)
     setIsAdding(true)
   }
@@ -361,6 +369,7 @@ export function SettingsModal({ isOpen, onClose, onSave }: SettingsModalProps) {
                     type="number"
                     min="10"
                     max="24"
+                    placeholder="16 (default)"
                     value={formData.defaultFontSize}
                     onChange={(e) =>
                       setFormData({ ...formData, defaultFontSize: parseInt(e.target.value) })

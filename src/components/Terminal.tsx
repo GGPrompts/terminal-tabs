@@ -74,6 +74,9 @@ export const Terminal = React.forwardRef<any, TerminalProps>(
     const [opacity, setOpacity] = useState(initialOpacity);
     const themeButtonRef = useRef<HTMLButtonElement>(null);
 
+    // Get tmux setting to conditionally enable scrollback/scrollbar
+    const useTmux = useSettingsStore((state) => state.useTmux);
+
     const terminalInfo = TERMINAL_TYPES.find(
       (t) => t.value === agent.terminalType,
     );
@@ -178,9 +181,8 @@ export const Terminal = React.forwardRef<any, TerminalProps>(
         allowProposedApi: true,
         // Disable local echo for Docker containers - let the PTY handle it
         cursorStyle: "block",
-        // Disable scrollback since tmux already handles it
-        // This prevents TUI apps from getting corrupted by xterm's scrollback buffer
-        scrollback: 0,
+        // Conditional scrollback: tmux handles it (0), non-tmux needs it (10000)
+        scrollback: useTmux ? 0 : 10000,
         convertEol: true,
       };
 
@@ -1181,7 +1183,7 @@ export const Terminal = React.forwardRef<any, TerminalProps>(
 
     return (
       <div
-        className={`terminal-container glass terminal-${agent.terminalType} ${themeClassName} ${embedded ? "embedded" : ""} ${isMaximized ? "maximized" : ""} ${isTUITool ? "terminal-tui-tool" : ""} ${isPyRadio ? "terminal-pyradio" : ""}`}
+        className={`terminal-container glass terminal-${agent.terminalType} ${themeClassName} ${embedded ? "embedded" : ""} ${isMaximized ? "maximized" : ""} ${isTUITool ? "terminal-tui-tool" : ""} ${isPyRadio ? "terminal-pyradio" : ""} ${useTmux ? "terminal-tmux" : "terminal-no-tmux"}`}
         style={
           {
             borderColor:

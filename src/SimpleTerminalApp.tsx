@@ -765,12 +765,15 @@ function SimpleTerminalApp() {
     ? TERMINAL_TYPES.find(t => t.value === activeAgent.terminalType)
     : null
 
-  // Footer control handlers
+  // Footer control handlers - Tab-specific customizations (persisted per-tab)
+  // These changes are specific to the active tab and persist through refresh
+  // New spawns always use defaults from spawn-options.json
   const handleFontSizeChange = (delta: number) => {
     if (!activeTerminal || !terminalRef.current) return
     const currentSize = activeTerminal.fontSize || 14
     const newSize = Math.max(10, Math.min(24, currentSize + delta))
     terminalRef.current.updateFontSize(newSize)
+    // Save to this terminal's state (persisted in localStorage)
     updateTerminal(activeTerminal.id, { fontSize: newSize })
   }
 
@@ -783,6 +786,7 @@ function SimpleTerminalApp() {
   const handleThemeChange = (theme: string) => {
     if (!activeTerminal || !terminalRef.current) return
     terminalRef.current.updateTheme(theme)
+    // Save to this terminal's state (persisted in localStorage)
     updateTerminal(activeTerminal.id, { theme })
     // Give theme change time to apply, then refit
     setTimeout(() => {
@@ -796,12 +800,14 @@ function SimpleTerminalApp() {
     if (!activeTerminal || !terminalRef.current) return
     const opacity = transparency / 100
     terminalRef.current.updateOpacity(opacity)
+    // Save to this terminal's state (persisted in localStorage)
     updateTerminal(activeTerminal.id, { transparency })
   }
 
   const handleFontFamilyChange = (fontFamily: string) => {
     if (!activeTerminal || !terminalRef.current) return
     terminalRef.current.updateFontFamily(fontFamily)
+    // Save to this terminal's state (persisted in localStorage)
     updateTerminal(activeTerminal.id, { fontFamily })
   }
 
@@ -949,7 +955,17 @@ function SimpleTerminalApp() {
               return (
                 <div
                   key={terminal.id}
-                  style={{ display: terminal.id === activeTerminalId ? 'block' : 'none' }}
+                  style={{
+                    // Use absolute positioning instead of display:none
+                    // This allows xterm.js to initialize properly with non-zero dimensions
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    visibility: terminal.id === activeTerminalId ? 'visible' : 'hidden',
+                    zIndex: terminal.id === activeTerminalId ? 1 : 0,
+                  }}
                   className="terminal-wrapper"
                 >
                   <Terminal
