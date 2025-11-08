@@ -525,7 +525,15 @@ export const Terminal = React.forwardRef<any, TerminalProps>(
       }, 800); // Consistent delay for proper terminal initialization
 
       // Handle terminal input - send directly to backend via WebSocket
+      // NOTE: We attach this immediately, but filter out data during "spawning" status
+      // to prevent escape sequences from leaking to the shell before PTY is ready
       const dataHandler = xterm.onData((data) => {
+        // Don't send data if terminal is still spawning (prevent escape sequence leak)
+        if (agent.status === 'spawning') {
+          console.debug('[Terminal] Ignoring input during spawn:', data.split('').map(c => c.charCodeAt(0).toString(16)).join(' '));
+          return;
+        }
+
         // Send all input directly to backend
         if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
           wsRef.current.send(

@@ -5,6 +5,7 @@ export interface Terminal {
   id: string;
   name: string;
   terminalType: string;
+  command?: string; // Original command (e.g., 'tfe', 'lazygit') for matching during reconnection
   icon?: string;
   agentId?: string;
   workingDir?: string;

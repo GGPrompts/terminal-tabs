@@ -790,6 +790,56 @@ router.delete('/tmux/sessions/:name', asyncHandler(async (req, res) => {
   }
 }));
 
+/**
+ * POST /api/tmux/cleanup - Kill all tmux sessions matching a pattern
+ * WARNING: This is destructive and cannot be undone
+ */
+router.post('/tmux/cleanup', asyncHandler(async (req, res) => {
+  const { pattern } = req.body;
+
+  if (!pattern || typeof pattern !== 'string') {
+    return res.status(400).json({
+      success: false,
+      error: 'Pattern is required'
+    });
+  }
+
+  try {
+    const { execSync } = require('child_process');
+
+    // List all sessions matching pattern
+    const sessionsOutput = execSync('tmux ls -F "#{session_name}" 2>/dev/null || echo ""').toString().trim();
+    const allSessions = sessionsOutput.split('\n').filter(s => s);
+
+    // Filter by pattern (simple wildcard matching)
+    const patternRegex = new RegExp('^' + pattern.replace(/\*/g, '.*') + '$');
+    const matchingSessions = allSessions.filter(s => patternRegex.test(s));
+
+    // Kill each matching session
+    let killed = 0;
+    for (const session of matchingSessions) {
+      try {
+        execSync(`tmux kill-session -t "${session}" 2>/dev/null`);
+        killed++;
+      } catch (err) {
+        console.warn(`[API] Failed to kill session ${session}:`, err.message);
+      }
+    }
+
+    res.json({
+      success: true,
+      message: `Killed ${killed} session(s) matching pattern "${pattern}"`,
+      killed,
+      sessions: matchingSessions
+    });
+  } catch (err) {
+    res.status(500).json({
+      success: false,
+      error: err.message
+    });
+  }
+}));
+
 // =============================================================================
 // ERROR HANDLING
 // =============================================================================

@@ -44,6 +44,7 @@ function SimpleTerminalApp() {
   const { useTmux, updateSettings } = useSettingsStore()
   const [showCustomizePanel, setShowCustomizePanel] = useState(false)
   const [spawnOptions, setSpawnOptions] = useState<SpawnOption[]>([])
+  const spawnOptionsRef = useRef<SpawnOption[]>([]) // Ref to avoid closure issues
   const wsRef = useRef<WebSocket | null>(null)
   const terminalRef = useRef<any>(null)
   const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -90,47 +91,92 @@ function SimpleTerminalApp() {
 
   // Load spawn options from JSON file
   const loadSpawnOptions = () => {
+    console.log('[SimpleTerminalApp] 📥 Loading spawn options...')
     fetch('/spawn-options.json')
       .then(res => res.json())
       .then(data => {
         if (data.spawnOptions) {
+          console.log('[SimpleTerminalApp] ✅ Spawn options loaded:', data.spawnOptions.length, 'options')
           setSpawnOptions(data.spawnOptions)
+          spawnOptionsRef.current = data.spawnOptions // Update ref immediately
         }
       })
-      .catch(err => console.error('Failed to load spawn options:', err))
+      .catch(err => console.error('[SimpleTerminalApp] ❌ Failed to load spawn options:', err))
   }
+
+  // Keep ref in sync with state
+  useEffect(() => {
+    spawnOptionsRef.current = spawnOptions
+  }, [spawnOptions])
 
   useEffect(() => {
     loadSpawnOptions()
   }, [])
+
+  // Clear all agentIds on mount - they're always stale after page refresh
+  // This prevents terminals from trying to render with old invalid agentIds
+  const hasHydrated = useRef(false)
+  useEffect(() => {
+    if (!hasHydrated.current && storedTerminals.length > 0) {
+      hasHydrated.current = true
+      console.log('[SimpleTerminalApp] 🧹 Clearing stale agentIds from localStorage terminals')
+
+      storedTerminals.forEach(terminal => {
+        if (terminal.agentId || terminal.status === 'active') {
+          updateTerminal(terminal.id, {
+            agentId: undefined,
+            status: 'spawning', // Will be updated to 'active' after reconnection
+          })
+        }
+      })
+    }
+  }, [storedTerminals.length]) // Run when terminals are hydrated from localStorage
+
+  // Query for tmux sessions after both spawn options load AND WebSocket connects
+  const hasQueriedSessions = useRef(false)
+  useEffect(() => {
+    console.log('[SimpleTerminalApp] 🔍 Checking reconnection conditions:', {
+      connectionStatus,
+      spawnOptionsCount: spawnOptions.length,
+      storedTerminalsCount: storedTerminals.length,
+      useTmux,
+      hasQueried: hasQueriedSessions.current,
+      wsReady: !!wsRef.current
+    })
+
+    if (
+      connectionStatus === 'connected' &&
+      spawnOptions.length > 0 &&
+      storedTerminals.length > 0 &&
+      useTmux &&
+      !hasQueriedSessions.current &&
+      wsRef.current
+    ) {
+      console.log('[SimpleTerminalApp] ✅ All conditions met! Querying for active tmux sessions...')
+      wsRef.current.send(JSON.stringify({ type: 'query-tmux-sessions' }))
+      hasQueriedSessions.current = true
+    } else if (storedTerminals.length > 0 && useTmux) {
+      console.log('[SimpleTerminalApp] ⏳ Waiting for conditions:', {
+        needsConnection: connectionStatus !== 'connected',
+        needsSpawnOptions: spawnOptions.length === 0,
+        alreadyQueried: hasQueriedSessions.current
+      })
+    }
+  }, [connectionStatus, spawnOptions.length, storedTerminals.length, useTmux])
+
+  // Reset query flag on disconnect
+  useEffect(() => {
+    if (connectionStatus === 'disconnected') {
+      hasQueriedSessions.current = false
+    }
+  }, [connectionStatus])
 
   // Initialize WebSocket
   useEffect(() => {
     SimpleSpawnService.initialize(wsRef)
     connectWebSocket()
 
-    // Cleanup on page unload/refresh - close all terminals on backend
-    const handleBeforeUnload = () => {
-      if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-        // Send cleanup message for all terminals
-        storedTerminals.forEach(terminal => {
-          if (terminal.agentId) {
-            wsRef.current?.send(JSON.stringify({
-              type: 'close_terminal',
-              terminalId: terminal.agentId
-            }))
-          }
-        })
-      }
-      // Clear localStorage to prevent orphaned references
-      clearAllTerminals()
-    }
-
-    window.addEventListener('beforeunload', handleBeforeUnload)
-
     return () => {
-      window.removeEventListener('beforeunload', handleBeforeUnload)
-
       if (reconnectTimeoutRef.current) {
         clearTimeout(reconnectTimeoutRef.current)
         reconnectTimeoutRef.current = null
@@ -260,12 +306,7 @@ function SimpleTerminalApp() {
     ws.onopen = () => {
       setConnectionStatus('connected')
       setReconnectAttempts(0)
-
-      // Clear any stale terminals from localStorage on fresh connection
-      // These are terminals from previous sessions that no longer exist on backend
-      if (storedTerminals.length > 0) {
-        clearAllTerminals()
-      }
+      // Note: Reconnection query happens in separate useEffect after spawn options load
     }
 
     ws.onclose = (evt) => {
@@ -428,7 +469,87 @@ function SimpleTerminalApp() {
           }
         }
         break
+
+      case 'tmux-sessions-list':
+        if (message.data && message.data.sessions) {
+          const activeSessions = new Set(message.data.sessions)
+          const currentSpawnOptions = spawnOptionsRef.current // Use ref to avoid closure issues
+
+          console.log('[SimpleTerminalApp] 📋 Active tmux sessions:', Array.from(activeSessions))
+          console.log('[SimpleTerminalApp] 💾 Stored terminals:', storedTerminals.map(t => ({
+            id: t.id.slice(-8),
+            sessionName: t.sessionName,
+            status: t.status,
+            terminalType: t.terminalType
+          })))
+          console.log('[SimpleTerminalApp] 📦 Spawn options loaded:', currentSpawnOptions.length)
+
+          // Process stored terminals
+          storedTerminals.forEach(terminal => {
+            if (terminal.sessionName && activeSessions.has(terminal.sessionName)) {
+              // Session exists! Reconnect by respawning (backend will auto-attach)
+              console.log(`[SimpleTerminalApp] 🔄 Reconnecting to session: ${terminal.sessionName}`)
+
+              // Find spawn option - prioritize matching by command, fallback to terminalType
+              let option = terminal.command
+                ? currentSpawnOptions.find(opt => opt.command === terminal.command)
+                : null
+
+              if (!option) {
+                // Fallback: find by terminalType (for terminals without command stored)
+                option = currentSpawnOptions.find(opt => opt.terminalType === terminal.terminalType)
+              }
+
+              if (option) {
+                // Respawn with existing sessionName (backend will reconnect)
+                handleReconnectTerminal(terminal, option)
+              } else {
+                console.warn(`[SimpleTerminalApp] ⚠️ No spawn option found for command: ${terminal.command}, type: ${terminal.terminalType}`)
+                console.log('[SimpleTerminalApp] Available spawn options:', currentSpawnOptions.map(o => ({ command: o.command, type: o.terminalType })))
+                // Mark as error but don't remove - user might add the spawn option later
+                updateTerminal(terminal.id, { status: 'error' })
+              }
+            } else if (terminal.sessionName) {
+              // Session is dead, remove terminal from store
+              console.log(`[SimpleTerminalApp] ❌ Session ${terminal.sessionName} not found, removing terminal`)
+              removeTerminal(terminal.id)
+            }
+            // If no sessionName, it's a non-tmux terminal, leave it alone
+          })
+        }
+        break
     }
+  }
+
+  // Terminal type abbreviations for short session names
+  const terminalTypeAbbreviations: Record<string, string> = {
+    'claude-code': 'cc',
+    'opencode': 'oc',
+    'codex': 'cx',
+    'gemini': 'gm',
+    'bash': 'bash',
+    'tui-tool': 'tui',
+    'default': 'term',
+  }
+
+  // Generate short session name like "tt-cc-a3k" (Terminal Tabs - Claude Code - random suffix)
+  const generateSessionName = (terminalType: string, label?: string, command?: string): string => {
+    // Special cases: TFE, LazyGit, etc. use their command as abbreviation
+    let abbrev: string
+    if (command === 'tfe') {
+      abbrev = 'tfe'
+    } else if (command === 'lazygit') {
+      abbrev = 'lg'
+    } else if (command === 'micro') {
+      abbrev = 'micro'
+    } else {
+      abbrev = terminalTypeAbbreviations[terminalType] || terminalType.slice(0, 4)
+    }
+
+    // Use random 3-char suffix to avoid collisions (like "tt-cc-a3k")
+    // This ensures unique names even if localStorage is cleared but tmux sessions remain
+    const suffix = Math.random().toString(36).substring(2, 5)
+    return `tt-${abbrev}-${suffix}`
   }
 
   const handleSpawnTerminal = async (option: SpawnOption) => {
@@ -438,17 +559,22 @@ function SimpleTerminalApp() {
       // Generate requestId FIRST
       const requestId = `spawn-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
 
+      // Generate short session name (e.g., "tt-cc-1", "tt-tfe-1")
+      const sessionName = useTmux ? generateSessionName(option.terminalType, option.label, option.command) : undefined
+
       // Create placeholder terminal IMMEDIATELY (before spawn)
       const newTerminal: StoredTerminal = {
         id: `terminal-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
         name: option.label,
         terminalType: option.terminalType,
+        command: option.command, // Store original command for matching during reconnection
         icon: option.icon,
         workingDir: option.workingDir || '~',
         theme: option.defaultTheme,
         transparency: option.defaultTransparency,
         fontSize: option.defaultFontSize,
         fontFamily: option.defaultFontFamily,
+        sessionName, // Store session name for persistence
         createdAt: Date.now(),
         status: 'spawning',
         requestId, // Store requestId for matching with WebSocket response
@@ -459,7 +585,7 @@ function SimpleTerminalApp() {
 
       // Then add to state (async)
       addTerminal(newTerminal)
-      console.log('[SimpleTerminalApp] Created placeholder terminal with requestId:', requestId)
+      console.log('[SimpleTerminalApp] Created placeholder terminal with requestId:', requestId, 'sessionName:', sessionName)
 
       // Build config
       const config: any = {
@@ -470,7 +596,8 @@ function SimpleTerminalApp() {
         transparency: option.defaultTransparency,
         size: { width: 800, height: 600 },
         useTmux,  // Pass tmux setting from store
-        sessionName: `terminal-tabs-${newTerminal.id}`,  // Unique session name for persistence
+        sessionName,  // Short session name like "tt-cc-1"
+        resumable: useTmux,  // CRITICAL: Make sessions persistent when using tmux!
       }
 
       // Convert command to commands array (like opustrator)
@@ -500,6 +627,72 @@ function SimpleTerminalApp() {
     }
   }
 
+  const handleReconnectTerminal = async (terminal: StoredTerminal, option: SpawnOption) => {
+    try {
+      // Generate requestId for reconnection
+      const requestId = `reconnect-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+
+      // Create updated terminal object
+      const updatedTerminal = {
+        ...terminal,
+        status: 'spawning' as const,
+        requestId,
+        agentId: undefined, // Clear old agentId (will get new one from backend)
+      }
+
+      // Update terminal state
+      updateTerminal(terminal.id, {
+        status: 'spawning',
+        requestId,
+        agentId: undefined,
+      })
+
+      // Store UPDATED terminal in pending spawns ref (with requestId!)
+      pendingSpawns.current.set(requestId, updatedTerminal)
+
+      console.log(`[SimpleTerminalApp] Reconnecting terminal ${terminal.id} to session ${terminal.sessionName}`)
+
+      // Build config with EXISTING sessionName (backend will detect and reconnect)
+      const config: any = {
+        terminalType: option.terminalType,
+        name: option.label,
+        workingDir: terminal.workingDir || option.workingDir || '~',
+        theme: terminal.theme || option.defaultTheme,
+        transparency: terminal.transparency ?? option.defaultTransparency,
+        fontSize: terminal.fontSize ?? option.defaultFontSize,
+        fontFamily: terminal.fontFamily ?? option.defaultFontFamily,
+        size: { width: 800, height: 600 },
+        useTmux: true, // Must be true for reconnection
+        sessionName: terminal.sessionName, // CRITICAL: Use existing session name!
+        resumable: true, // CRITICAL: Must be resumable for persistence!
+      }
+
+      // Add command/toolName
+      if (option.terminalType === 'tui-tool') {
+        config.toolName = option.command
+      } else if (option.command) {
+        config.commands = [option.command]
+        config.startCommand = option.command
+      }
+
+      console.log('[SimpleTerminalApp] Reconnecting with config:', config)
+
+      // Send spawn request (backend will detect existing session and reconnect)
+      const returnedRequestId = await SimpleSpawnService.spawn({ config, requestId })
+
+      if (!returnedRequestId) {
+        console.error('Failed to reconnect terminal')
+        updateTerminal(terminal.id, { status: 'error' })
+        return
+      }
+
+      // Status will be updated to 'active' when WebSocket receives terminal-spawned
+    } catch (error) {
+      console.error('Error reconnecting terminal:', error)
+      updateTerminal(terminal.id, { status: 'error' })
+    }
+  }
+
   const handleCloseTerminal = (terminalId: string) => {
     const terminal = storedTerminals.find(t => t.id === terminalId)
     if (terminal && terminal.agentId) {
@@ -512,6 +705,43 @@ function SimpleTerminalApp() {
       }
     }
     removeTerminal(terminalId)
+  }
+
+  const handleClearAllSessions = async () => {
+    if (!confirm('⚠️ Clear all sessions and localStorage?\n\nThis will:\n• Kill all active tmux sessions\n• Close all terminals\n• Clear all stored data\n\nThis cannot be undone!')) {
+      return
+    }
+
+    console.log('[SimpleTerminalApp] Clearing all sessions...')
+
+    // Close all active terminals via WebSocket
+    storedTerminals.forEach(terminal => {
+      if (terminal.agentId && wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+        wsRef.current.send(JSON.stringify({
+          type: 'close',
+          terminalId: terminal.agentId,
+        }))
+      }
+    })
+
+    // Kill all terminal-tabs tmux sessions (in case some are orphaned)
+    // Pattern 'tt-*' only matches sessions like: tt-bash-a3k, tt-cc-x9z, etc.
+    // Safe: 'terminal-tabs', 'pyradio', 'tfe' won't match (don't start with "tt-")
+    try {
+      await fetch('/api/tmux/cleanup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pattern: 'tt-*' })
+      })
+      console.log('[SimpleTerminalApp] 🧹 Killed all terminal-tabs tmux sessions')
+    } catch (err) {
+      console.warn('[SimpleTerminalApp] Failed to cleanup tmux sessions:', err)
+    }
+
+    // Clear all terminals from store (will also clear localStorage via persist)
+    clearAllTerminals()
+
+    console.log('[SimpleTerminalApp] ✅ All sessions cleared')
   }
 
   const handleCommand = (command: string, terminalId: string) => {
@@ -602,6 +832,13 @@ function SimpleTerminalApp() {
         </div>
 
         <div className="header-actions">
+          <button
+            className="clear-sessions-button"
+            onClick={handleClearAllSessions}
+            title="Clear all sessions and localStorage"
+          >
+            🗑️
+          </button>
           <button
             className="settings-button"
             onClick={() => setShowSettings(true)}
@@ -694,12 +931,17 @@ function SimpleTerminalApp() {
             {/* Render ALL terminals, but hide inactive ones with CSS */}
             {storedTerminals.map((terminal) => {
               const agent = agents.find(a => a.id === terminal.agentId)
-              if (!agent) {
-                // Terminal not ready yet
+
+              // Don't render Terminal component until status is 'active' and agent exists
+              if (!agent || terminal.status !== 'active') {
                 return terminal.id === activeTerminalId ? (
                   <div key={terminal.id} className="loading-state">
                     <div className="loading-spinner"></div>
-                    <div className="loading-text">Connecting to terminal...</div>
+                    <div className="loading-text">
+                      {terminal.status === 'spawning' ? 'Connecting to terminal...' :
+                       terminal.status === 'error' ? 'Failed to connect' :
+                       'Loading...'}
+                    </div>
                   </div>
                 ) : null
               }

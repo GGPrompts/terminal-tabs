@@ -1,13 +1,16 @@
 {
   "spawnOptions": [
     {
-      "label": "Claude Code",
-      "command": "claude",
-      "terminalType": "claude-code",
-      "icon": "🤖",
-      "description": "Claude Code (interactive mode)",
-      "defaultTheme": "amber",
-      "defaultTransparency": 100
+      "label": "Tmuxplexer",
+      "command": "./tmuxplexer",
+      "terminalType": "tui-tool",
+      "icon": "💻",
+      "description": "tmux manager",
+      "workingDir": "~/projects/tmuxplexer",
+      "defaultTheme": "github-dark",
+      "defaultTransparency": 100,
+      "defaultFontFamily": "'JetBrains Mono', monospace",
+      "defaultFontSize": 16
     },
     {
       "label": "Claude (skip permissions)",
@@ -15,6 +18,25 @@
       "terminalType": "claude-code",
       "icon": "⚡",
       "description": "Claude Code with no permission prompts",
+      "defaultTheme": "amber",
+      "defaultTransparency": 100
+    },
+    {
+      "label": "TFE",
+      "command": "tfe",
+      "terminalType": "bash",
+      "workingDir": "~/projects",
+      "icon": "📁",
+      "description": "Terminal File Explorer",
+      "defaultTheme": "default",
+      "defaultTransparency": 95
+    },
+    {
+      "label": "Claude Code",
+      "command": "claude",
+      "terminalType": "claude-code",
+      "icon": "🤖",
+      "description": "Claude Code (interactive mode)",
       "defaultTheme": "amber",
       "defaultTransparency": 100
     },
@@ -53,16 +75,6 @@
       "description": "Plain bash terminal",
       "defaultTheme": "matrix",
       "defaultTransparency": 90
-    },
-    {
-      "label": "TFE",
-      "command": "tfe",
-      "terminalType": "bash",
-      "workingDir": "~/projects",
-      "icon": "📁",
-      "description": "Terminal File Explorer",
-      "defaultTheme": "default",
-      "defaultTransparency": 95
     },
     {
       "label": "Micro Editor",

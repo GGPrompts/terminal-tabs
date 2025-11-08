@@ -228,8 +228,12 @@ wss.on('connection', (ws) => {
             const tmuxListOutput = execSync('tmux ls -F "#{session_name}" 2>/dev/null || echo ""').toString().trim();
             const allSessions = tmuxListOutput.split('\n').filter(s => s);
 
-            // Filter for terminal-tabs sessions only
-            const terminalTabsSessions = allSessions.filter(s => s.startsWith('terminal-tabs-'));
+            // Filter for terminal-tabs sessions (both old and new format)
+            // Old: terminal-tabs-terminal-1762...
+            // New: tt-bash-xyz, tt-cc-abc, etc.
+            const terminalTabsSessions = allSessions.filter(s =>
+              s.startsWith('terminal-tabs-') || s.startsWith('tt-')
+            );
 
             log.info(`Found ${terminalTabsSessions.length} terminal-tabs tmux sessions`, terminalTabsSessions);
 
