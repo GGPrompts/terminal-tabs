@@ -796,6 +796,202 @@ The app is fully functional - everything else is polish and nice-to-haves!
 
 ---
 
-**Last Updated:** November 8, 2025 - Evening (Session 2)
-**Latest Changes:** Text/Background separation + Font size defaulting fix
+**Last Updated:** November 8, 2025 - Late Evening (Session 3)
+**Latest Changes:** Icon picker, drag-drop reordering, console log fix, reset button fix
 **Status:** ✅ All core features working! Background customization complete!
+
+---
+
+## 🧹 NEXT SESSION: Opustrator Legacy Code Audit (November 9, 2025)
+
+### Background
+Terminal Tabs was extracted from [Opustrator](https://github.com/GGPrompts/opustrator) v3.14.2 to create a simpler tab-based version. During extraction, some legacy code from Opustrator's canvas-based system may have been left behind.
+
+### Your Task: Comprehensive Audit & Report
+
+**Goal:** Identify all Opustrator legacy code and generate a detailed report of what's safe to remove vs what's still needed.
+
+**Phase 1: Discovery (Thorough Investigation)**
+
+1. **Backend API Routes Audit** (`backend/routes/api.js`):
+   - Line 1-2: "Opustrator API Routes - Simplified & Explicit"
+   - `/api/agents` endpoint (POST, GET, DELETE) - Is this used? Check if frontend uses it
+   - `/api/layouts` endpoints - Are layouts used in Terminal Tabs?
+   - Document each endpoint: Used/Unused, Safe to remove Y/N
+
+2. **Backend Modules Audit**:
+   ```bash
+   backend/modules/
+   ├── layout-manager.js        # Used? (mentioned in api.js)
+   ├── workspace-manager.js      # Canvas feature?
+   ├── docker-pool.js           # Docker support needed?
+   ├── terminal-registry.js     # KEEP (core)
+   ├── pty-handler.js          # KEEP (core)
+   ├── unified-spawn.js        # KEEP (core)
+   ├── tmux-session-manager.js # KEEP (core)
+   ├── tui-tools.js            # KEEP (core)
+   └── logger.js               # KEEP (core)
+   ```
+
+3. **Frontend Services Audit**:
+   ```bash
+   src/services/
+   └── SimpleSpawnService.ts   # Uses WebSocket, not /api/agents
+   ```
+   - Check: Are there any Opustrator-specific imports?
+   - Check: Any canvas-related code?
+
+4. **Archive Directory** (`backend/archive/`):
+   - Verify these are truly unused
+   - Safe to delete?
+
+5. **Package Dependencies**:
+   - Check `package.json` for Opustrator-specific dependencies
+   - Look for canvas libraries, unused UI frameworks, etc.
+
+6. **Code References**:
+   - Search for "opustrator" (case-insensitive) in all files
+   - Search for "canvas" references
+   - Search for "workspace" references
+   - Search for "docker" references (is Docker spawning used?)
+
+7. **Configuration Files**:
+   - Check `.env` files for Opustrator-specific vars
+   - Check any config files for legacy settings
+
+**Phase 2: Analysis (Deep Dive)**
+
+For each potentially removable item:
+1. **Trace Usage**: Use Grep/Task tools to find all references
+2. **Dependency Check**: What depends on it? What does it depend on?
+3. **Risk Assessment**: Low/Medium/High risk to remove
+4. **Testing Impact**: Can we test that removal didn't break anything?
+
+**Phase 3: Report Generation**
+
+Create a detailed markdown report: `OPUSTRATOR_LEGACY_AUDIT.md`
+
+**Report Structure:**
+
+```markdown
+# Opustrator Legacy Code Audit Report
+**Date:** November 9, 2025
+**Auditor:** Claude (Sonnet 4.5)
+**Codebase:** Terminal Tabs (extracted from Opustrator v3.14.2)
+
+## Executive Summary
+[High-level findings: X files to remove, Y endpoints to clean up, Z dependencies to drop]
+
+## Safe to Remove (Low Risk)
+
+### Backend API Endpoints
+- `/api/agents/*` - **UNUSED** - Frontend uses WebSocket for spawning
+  - Evidence: [Grep results showing no frontend usage]
+  - References: Only in api.js, not called anywhere
+  - Removal: Delete lines X-Y in api.js
+  - Testing: Spawn terminals, verify WebSocket still works
+
+### Backend Modules
+- `backend/modules/layout-manager.js` - **UNUSED** - No tab layouts in Terminal Tabs
+  - Evidence: [Usage analysis]
+  - Dependencies: Only api.js imports it
+  - Removal: Delete file + remove from api.js
+  - Testing: [Test plan]
+
+### Archive Directory
+- `backend/archive/` - **SAFE TO DELETE**
+  - Contents: [List files]
+  - Evidence: No imports found
+  - Removal: `rm -rf backend/archive`
+
+## Investigate Further (Medium Risk)
+
+### Docker Support
+- `platform: 'docker'` in spawn config - Is this used?
+  - Check: spawn-options.json for docker usage
+  - Check: User's workflow - do they use Docker spawning?
+  - Decision: Keep or remove docker-pool.js?
+
+## KEEP (Core Functionality)
+
+### Critical Modules
+- `terminal-registry.js` - **CORE** - Terminal state management
+- `pty-handler.js` - **CORE** - PTY process spawning
+- `unified-spawn.js` - **CORE** - Terminal spawning logic
+- `tmux-session-manager.js` - **CORE** - Tmux integration
+- `logger.js` - **CORE** - Logging system
+
+## Cleanup Plan (Recommended Order)
+
+1. **Phase 1: Low Risk (Do First)**
+   - [ ] Remove `/api/agents` endpoints from api.js
+   - [ ] Delete `backend/archive/` directory
+   - [ ] Remove unused layout endpoints
+   - [ ] Test: Spawn terminals, verify functionality
+
+2. **Phase 2: Medium Risk (After Testing)**
+   - [ ] Remove layout-manager.js (if unused)
+   - [ ] Remove Docker support (if unused)
+   - [ ] Clean up package.json dependencies
+   - [ ] Test: Full regression test
+
+3. **Phase 3: Documentation**
+   - [ ] Update CLAUDE.md with cleanup notes
+   - [ ] Update README.md to remove Opustrator references
+   - [ ] Add "Cleaned up legacy code" to changelog
+
+## Code Diff Previews
+
+[Include specific diffs for each removal so user can review]
+
+### Example: Remove /api/agents endpoint
+```diff
+- /**
+-  * POST /api/agents - Spawn new agent with explicit terminal type
+-  */
+- router.post('/agents', validateBody(spawnAgentSchema), asyncHandler(async (req, res) => {
+-   // ... 40 lines of code
+- }));
+```
+
+## Testing Checklist
+
+After each removal phase:
+- [ ] Spawn terminals (Bash, TFE, Claude Code)
+- [ ] Close terminals
+- [ ] Reconnect after refresh (tmux persistence)
+- [ ] Customize themes/fonts
+- [ ] Check backend logs for errors
+- [ ] Verify WebSocket communication
+
+## Estimated Impact
+
+- **Files to Remove:** X files (~Y KB)
+- **Lines of Code Removed:** ~Z lines
+- **Dependencies to Remove:** N packages
+- **Maintenance Reduction:** [Estimate]
+```
+
+**Phase 4: Present Findings**
+
+After generating the report:
+1. Show me a summary of findings
+2. Ask if I want to proceed with Phase 1 removals
+3. Wait for approval before making any changes
+
+**Tools to Use:**
+- `Grep` - Search for references
+- `Read` - Examine files
+- `Glob` - Find file patterns
+- `Task` with `subagent_type=Explore` for deep codebase exploration
+
+**IMPORTANT:**
+- Do NOT remove anything without explicit approval
+- Be thorough - check every reference
+- Consider user's workflow (they use TFE, Claude Code, tmux heavily)
+- Prioritize safety over aggressive cleanup
+
+---
+
+**Deliverable for Morning:**
+`OPUSTRATOR_LEGACY_AUDIT.md` - Comprehensive report ready for review over coffee ☕
