@@ -227,6 +227,91 @@ See PLAN.md for detailed technical documentation of these fixes.
 
 ---
 
+## 🔍 Debugging & Monitoring
+
+### Checking Backend Logs
+
+The backend runs in a tmux session when started with `./start-tmux.sh`. View logs in multiple ways:
+
+**1. Attach to Backend Session (Live Logs)**
+```bash
+tmux attach -t terminal-tabs:backend
+# Press Ctrl+B, then D to detach
+```
+
+**2. View Logs in App (Dev Logs Terminal)**
+- Spawn "Dev Logs" terminal from the spawn menu
+- Shows last 100 lines with beautiful colors
+- Uses tmux capture-pane for live viewing
+
+**3. Check Active Tmux Sessions**
+```bash
+tmux ls
+# Shows all tmux sessions including:
+# - terminal-tabs:backend (backend server)
+# - terminal-tabs:frontend (Vite dev server)
+# - tt-bash-xyz (spawned bash terminals)
+# - tt-cc-abc (spawned Claude Code terminals)
+```
+
+### Monitoring Terminal Sessions
+
+**List Active Terminal Sessions**
+```bash
+# In terminal or via Dev Logs spawn option:
+tmux ls | grep "^tt-"
+# Shows all spawned terminal sessions (tt-bash-*, tt-cc-*, etc.)
+```
+
+**Capture Pane Contents**
+```bash
+# Capture last 100 lines from a specific session
+tmux capture-pane -t tt-bash-xyz -p -S -100
+
+# Capture entire scrollback
+tmux capture-pane -t tt-bash-xyz -p -S -
+```
+
+**Monitor WebSocket Messages**
+Backend logs show WebSocket activity when `LOG_LEVEL=5` (debug):
+```bash
+# In backend/.env:
+LOG_LEVEL=5  # Shows detailed PTY operations, tmux session info
+
+# Restart backend:
+./stop.sh && ./start-tmux.sh
+```
+
+### Common Debugging Scenarios
+
+**1. Terminal won't spawn**
+- Check backend logs: `tmux attach -t terminal-tabs:backend`
+- Look for spawn errors, working directory validation failures
+- Verify `spawn-options.json` syntax
+
+**2. Terminal spawned but blank**
+- Check if session exists: `tmux ls | grep tt-`
+- Try refit button (🔄) in footer
+- Check browser console for xterm.js errors
+
+**3. Persistence not working**
+- Verify tmux sessions survive: refresh page, run `tmux ls`
+- Check localStorage in browser DevTools (Application → Local Storage)
+- Look for `simple-terminal-storage` key with terminals array
+
+**4. Backend crash/restart**
+- Terminals in tmux sessions survive backend restart
+- Refresh frontend to reconnect
+- Sessions will reattach automatically
+
+### Dev Server Ports
+
+- **Frontend**: http://localhost:5173 (Vite dev server)
+- **Backend**: http://localhost:8127 (WebSocket + REST API)
+- **WebSocket**: ws://localhost:8127
+
+---
+
 ## 🔗 Links
 
 - **GitHub**: https://github.com/GGPrompts/terminal-tabs

@@ -530,7 +530,7 @@ style={{
 
 **Last Updated:** November 8, 2025 - Evening (120k tokens used)
 **Status:** ✅ PERSISTENCE FULLY WORKING! All terminals persist through refresh with proper rendering!
-**Dev Server:** Running at http://localhost:5174/
+**Dev Server:** Running at http://localhost:5173/
 
 ---
 
