@@ -15,6 +15,8 @@ interface SpawnOption {
   workingDir?: string
   defaultTheme?: string
   defaultTransparency?: number
+  defaultFontFamily?: string
+  defaultFontSize?: number
 }
 
 function SimpleTerminalApp() {
@@ -22,8 +24,10 @@ function SimpleTerminalApp() {
   const [connectionStatus, setConnectionStatus] = useState<'connected' | 'disconnected' | 'connecting'>('disconnected')
   const [showSpawnMenu, setShowSpawnMenu] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
+  const [showCustomizePanel, setShowCustomizePanel] = useState(false)
   const [spawnOptions, setSpawnOptions] = useState<SpawnOption[]>([])
   const wsRef = useRef<WebSocket | null>(null)
+  const terminalRef = useRef<any>(null)
   const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [reconnectAttempts, setReconnectAttempts] = useState(0)
   const processedAgentIds = useRef<Set<string>>(new Set())
@@ -404,6 +408,8 @@ function SimpleTerminalApp() {
         workingDir: option.workingDir || '~',
         theme: option.defaultTheme,
         transparency: option.defaultTransparency,
+        fontSize: option.defaultFontSize,
+        fontFamily: option.defaultFontFamily,
         createdAt: Date.now(),
         status: 'spawning',
         requestId, // Store requestId for matching with WebSocket response
@@ -487,6 +493,46 @@ function SimpleTerminalApp() {
   const terminalInfo = activeAgent
     ? TERMINAL_TYPES.find(t => t.value === activeAgent.terminalType)
     : null
+
+  // Footer control handlers
+  const handleFontSizeChange = (delta: number) => {
+    if (!activeTerminal || !terminalRef.current) return
+    const currentSize = activeTerminal.fontSize || 14
+    const newSize = Math.max(10, Math.min(24, currentSize + delta))
+    terminalRef.current.updateFontSize(newSize)
+    updateTerminal(activeTerminal.id, { fontSize: newSize })
+  }
+
+  const handleRefitTerminal = () => {
+    if (!terminalRef.current) return
+    // Call the Terminal's refit method to force a proper refit
+    terminalRef.current.refit()
+  }
+
+  const handleThemeChange = (theme: string) => {
+    if (!activeTerminal || !terminalRef.current) return
+    terminalRef.current.updateTheme(theme)
+    updateTerminal(activeTerminal.id, { theme })
+    // Give theme change time to apply, then refit
+    setTimeout(() => {
+      if (terminalRef.current) {
+        terminalRef.current.refit()
+      }
+    }, 350)
+  }
+
+  const handleTransparencyChange = (transparency: number) => {
+    if (!activeTerminal || !terminalRef.current) return
+    const opacity = transparency / 100
+    terminalRef.current.updateOpacity(opacity)
+    updateTerminal(activeTerminal.id, { transparency })
+  }
+
+  const handleFontFamilyChange = (fontFamily: string) => {
+    if (!activeTerminal || !terminalRef.current) return
+    terminalRef.current.updateFontFamily(fontFamily)
+    updateTerminal(activeTerminal.id, { fontFamily })
+  }
 
   return (
     <div className="simple-terminal-app">
@@ -583,11 +629,14 @@ function SimpleTerminalApp() {
           </div>
         ) : activeAgent ? (
           <Terminal
+            ref={terminalRef}
             agent={activeAgent}
             onClose={() => handleCloseTerminal(activeTerminal!.id)}
             onCommand={(cmd) => handleCommand(cmd, activeTerminal!.id)}
             wsRef={wsRef}
             embedded={true}
+            initialFontSize={activeTerminal.fontSize}
+            initialFontFamily={activeTerminal.fontFamily}
           />
         ) : (
           <div className="loading-state">
@@ -597,12 +646,12 @@ function SimpleTerminalApp() {
         )}
       </div>
 
-      {/* App Footer - Shows active terminal info */}
+      {/* App Footer - Shows active terminal info and controls */}
       {activeTerminal && activeAgent && (
         <div className="app-footer">
           <div className="footer-terminal-info">
             <span className="footer-terminal-icon">
-              {terminalInfo?.icon || '💻'}
+              {activeTerminal.icon || '💻'}
             </span>
             <span className="footer-terminal-name">{activeAgent.name}</span>
             <span className="footer-terminal-type">({activeAgent.terminalType})</span>
@@ -610,7 +659,48 @@ function SimpleTerminalApp() {
               <span className="footer-terminal-pid">PID: {activeAgent.pid}</span>
             )}
           </div>
-          <div className="footer-actions">
+
+          <div className="footer-controls">
+            {/* Font Size Controls - Always Visible */}
+            <div className="footer-font-controls">
+              <button
+                className="footer-control-btn"
+                onClick={() => handleFontSizeChange(-1)}
+                title="Decrease font size"
+                disabled={!activeTerminal.fontSize || activeTerminal.fontSize <= 10}
+              >
+                -
+              </button>
+              <span className="font-size-display">{activeTerminal.fontSize || 14}px</span>
+              <button
+                className="footer-control-btn"
+                onClick={() => handleFontSizeChange(1)}
+                title="Increase font size"
+                disabled={activeTerminal.fontSize && activeTerminal.fontSize >= 24}
+              >
+                +
+              </button>
+            </div>
+
+            {/* Refit Button */}
+            <button
+              className="footer-control-btn"
+              onClick={handleRefitTerminal}
+              title="Refit terminal (fix blank/stuck display)"
+            >
+              🔄
+            </button>
+
+            {/* Customize Panel Toggle */}
+            <button
+              className="footer-control-btn"
+              onClick={() => setShowCustomizePanel(!showCustomizePanel)}
+              title="Customize theme, transparency, font"
+            >
+              🎨
+            </button>
+
+            {/* Close Button */}
             <button
               className="footer-action-btn footer-close"
               onClick={() => handleCloseTerminal(activeTerminal.id)}
@@ -619,6 +709,61 @@ function SimpleTerminalApp() {
               ✕
             </button>
           </div>
+
+          {/* Expandable Customization Panel */}
+          {showCustomizePanel && (
+            <div className="footer-customize-panel">
+              <div className="customize-row">
+                <label>
+                  Theme
+                  <select
+                    value={activeTerminal.theme || 'default'}
+                    onChange={(e) => handleThemeChange(e.target.value)}
+                  >
+                    <option value="default">Default</option>
+                    <option value="amber">Amber</option>
+                    <option value="matrix">Matrix</option>
+                    <option value="dracula">Dracula</option>
+                    <option value="monokai">Monokai</option>
+                    <option value="solarized-dark">Solarized Dark</option>
+                    <option value="github-dark">GitHub Dark</option>
+                    <option value="cyberpunk">Cyberpunk</option>
+                    <option value="holographic">Holographic</option>
+                    <option value="vaporwave">Vaporwave</option>
+                  </select>
+                </label>
+
+                <label>
+                  Transparency: {activeTerminal.transparency || 100}%
+                  <input
+                    type="range"
+                    min="0"
+                    max="100"
+                    value={activeTerminal.transparency || 100}
+                    onChange={(e) => handleTransparencyChange(parseInt(e.target.value))}
+                  />
+                </label>
+              </div>
+
+              <div className="customize-row">
+                <label>
+                  Font Family
+                  <select
+                    value={activeTerminal.fontFamily || 'monospace'}
+                    onChange={(e) => handleFontFamilyChange(e.target.value)}
+                  >
+                    <option value="monospace">Monospace (Default)</option>
+                    <option value="'JetBrains Mono', monospace">JetBrains Mono</option>
+                    <option value="'Fira Code', monospace">Fira Code</option>
+                    <option value="'Source Code Pro', monospace">Source Code Pro</option>
+                    <option value="'Menlo', monospace">Menlo</option>
+                    <option value="'Consolas', monospace">Consolas</option>
+                    <option value="'Monaco', monospace">Monaco</option>
+                  </select>
+                </label>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>

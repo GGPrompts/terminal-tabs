@@ -689,9 +689,69 @@ VITE_WS_URL=wss://your-domain.com/ws
 
 ---
 
-**Last Updated**: November 8, 2025 - Evening Session
+**Last Updated**: November 8, 2025 - Late Evening Session
 
-## 🔧 Current Session Status (Nov 8 Evening)
+## 🔧 Current Session Status (Nov 8 Late Evening)
+
+### ✅ Completed This Session - Footer Customization Features:
+**Session Goal**: Add live terminal customization controls to footer
+
+1. **Font Settings in Spawn Options Manager** ✅
+   - Added `defaultFontFamily` dropdown (JetBrains Mono, Fira Code, Source Code Pro, etc.)
+   - Added `defaultFontSize` field (10-24px range)
+   - New terminals spawn with custom font defaults from spawn-options.json
+
+2. **Always-Visible Font Size Controls** ✅
+   - Added `[-]` and `[+]` buttons in footer for quick font size adjustment
+   - Shows current font size (e.g., "14px")
+   - Buttons disabled at min (10px) and max (24px) limits
+   - Changes saved per-terminal in localStorage
+
+3. **Refit Terminal Button** ✅
+   - Added 🔄 button to footer to fix blank/stuck terminal displays
+   - Calls proper `refit()` method on Terminal component
+   - Triggers `fitAddon.fit()`, refreshes display, and sends new dimensions to backend
+   - Solves blank screen issues that previously required manual resize
+
+4. **Expandable Customization Panel** ✅
+   - Added 🎨 button to toggle advanced customization panel
+   - **Theme selector**: Choose from 10+ themes (amber, matrix, dracula, cyberpunk, etc.)
+   - **Transparency slider**: 0-100% with live preview
+   - **Font family dropdown**: Change fonts on-the-fly
+   - All changes apply instantly to active terminal
+   - Auto-refit after theme change (350ms delay) to prevent blank screens
+
+5. **UI Improvements** ✅
+   - Footer now uses spawn option icon instead of generic terminal type icon
+   - Added `fontFamily` field to terminal state (src/stores/simpleTerminalStore.ts)
+   - Font family tracked per-terminal and persists in localStorage
+   - Smooth hover effects and visual feedback on all controls
+   - Glassmorphic styling for customization panel
+
+### 🐛 Bug Fixes This Session:
+1. **Font family changes now work** - Added state tracking and proper handler
+2. **Theme changes no longer cause blank screens** - Added refit with 350ms delay
+3. **Refit button actually works** - Exposed proper refit() method from Terminal component
+
+### 📝 Files Modified:
+- `src/components/SettingsModal.tsx` - Added font family/size fields to form
+- `src/components/Terminal.tsx` - Added `refit()` method and `initialFontFamily` prop
+- `src/SimpleTerminalApp.tsx` - Added footer controls, handlers, and customization panel UI
+- `src/SimpleTerminalApp.css` - Added styles for footer controls and customization panel
+- `src/stores/simpleTerminalStore.ts` - Added `fontFamily` field to Terminal interface
+
+### 🎯 What Works Now:
+- ✅ Font size +/- buttons for quick adjustments
+- ✅ Refit button fixes blank/stuck terminals
+- ✅ Live theme changes with auto-refit
+- ✅ Live transparency changes
+- ✅ Live font family changes
+- ✅ Font settings in spawn options (defaultFontFamily, defaultFontSize)
+- ✅ All settings persist per-terminal in localStorage
+
+---
+
+## 🔧 Previous Session Status (Nov 8 Evening)
 
 ### ✅ Completed This Session:
 1. **Removed broken profile/localStorage system** - Deleted `useProfilesStore.ts`, `profileMigration.ts`, old SettingsModal files

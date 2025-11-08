@@ -415,8 +415,7 @@
 /* App Footer - Terminal Info Bar */
 .app-footer {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
+  flex-direction: column;
   padding: 6px 16px;
   background: #000000;
   border-top: 1px solid rgba(255, 255, 255, 0.1);
@@ -424,6 +423,12 @@
   color: rgba(255, 255, 255, 0.7);
   min-height: 32px;
   flex-shrink: 0;
+}
+
+.app-footer > div:first-child {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
 }
 
 .footer-terminal-info {
@@ -454,10 +459,58 @@
   font-family: 'Monaco', 'Menlo', 'Courier New', monospace;
 }
 
-.footer-actions {
+.footer-controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.footer-font-controls {
   display: flex;
   align-items: center;
   gap: 6px;
+  padding: 2px 8px;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.font-size-display {
+  font-size: 12px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.8);
+  min-width: 32px;
+  text-align: center;
+  font-family: 'Monaco', 'Menlo', 'Courier New', monospace;
+}
+
+.footer-control-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  height: 24px;
+  padding: 0 6px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+  color: rgba(255, 255, 255, 0.7);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.footer-control-btn:hover:not(:disabled) {
+  background: rgba(100, 150, 255, 0.15);
+  border-color: rgba(100, 150, 255, 0.3);
+  color: rgba(100, 150, 255, 1);
+  transform: translateY(-1px);
+}
+
+.footer-control-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
 }
 
 .footer-action-btn {
@@ -486,4 +539,62 @@
   background: rgba(239, 68, 68, 0.2);
   border-color: rgba(239, 68, 68, 0.3);
   color: #ef4444;
+}
+
+/* Footer Customize Panel */
+.footer-customize-panel {
+  margin-top: 8px;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.customize-row {
+  display: flex;
+  gap: 16px;
+  align-items: flex-end;
+}
+
+.customize-row label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.6);
+  font-weight: 500;
+}
+
+.customize-row select,
+.customize-row input[type="range"] {
+  padding: 6px 10px;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.customize-row select:hover,
+.customize-row select:focus {
+  border-color: rgba(100, 150, 255, 0.4);
+  background: rgba(100, 150, 255, 0.05);
+  outline: none;
+}
+
+.customize-row input[type="range"] {
+  width: 100%;
+  cursor: grab;
+  height: 6px;
+  padding: 0;
+}
+
+.customize-row input[type="range"]:active {
+  cursor: grabbing;
 }

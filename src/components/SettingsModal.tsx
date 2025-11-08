@@ -10,6 +10,8 @@ interface SpawnOption {
   workingDir?: string
   defaultTheme?: string
   defaultTransparency?: number
+  defaultFontFamily?: string
+  defaultFontSize?: number
 }
 
 interface SettingsModalProps {
@@ -34,6 +36,8 @@ export function SettingsModal({ isOpen, onClose, onSave }: SettingsModalProps) {
     workingDir: '~',
     defaultTheme: 'default',
     defaultTransparency: 100,
+    defaultFontFamily: 'monospace',
+    defaultFontSize: 14,
   })
 
   useEffect(() => {
@@ -137,6 +141,8 @@ export function SettingsModal({ isOpen, onClose, onSave }: SettingsModalProps) {
       workingDir: '~',
       defaultTheme: 'default',
       defaultTransparency: 100,
+      defaultFontFamily: 'monospace',
+      defaultFontSize: 14,
     })
     setIsAdding(false)
     setEditingIndex(null)
@@ -328,6 +334,36 @@ export function SettingsModal({ isOpen, onClose, onSave }: SettingsModalProps) {
                     value={formData.defaultTransparency}
                     onChange={(e) =>
                       setFormData({ ...formData, defaultTransparency: parseInt(e.target.value) })
+                    }
+                  />
+                </label>
+              </div>
+
+              <div className="form-row">
+                <label>
+                  Font Family
+                  <select
+                    value={formData.defaultFontFamily}
+                    onChange={(e) => setFormData({ ...formData, defaultFontFamily: e.target.value })}
+                  >
+                    <option value="monospace">Monospace (Default)</option>
+                    <option value="'JetBrains Mono', monospace">JetBrains Mono</option>
+                    <option value="'Fira Code', monospace">Fira Code</option>
+                    <option value="'Source Code Pro', monospace">Source Code Pro</option>
+                    <option value="'Menlo', monospace">Menlo</option>
+                    <option value="'Consolas', monospace">Consolas</option>
+                    <option value="'Monaco', monospace">Monaco</option>
+                  </select>
+                </label>
+                <label>
+                  Font Size (px)
+                  <input
+                    type="number"
+                    min="10"
+                    max="24"
+                    value={formData.defaultFontSize}
+                    onChange={(e) =>
+                      setFormData({ ...formData, defaultFontSize: parseInt(e.target.value) })
                     }
                   />
                 </label>

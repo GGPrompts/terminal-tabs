@@ -11,6 +11,7 @@ export interface Terminal {
   theme?: string;
   transparency?: number;
   fontSize?: number;
+  fontFamily?: string;
   sessionName?: string;
   createdAt: number;
   status?: 'spawning' | 'active' | 'closed' | 'error';

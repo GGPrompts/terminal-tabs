@@ -31,6 +31,7 @@ interface TerminalProps {
   initialTheme?: string; // Initial theme to use
   initialOpacity?: number; // Initial opacity (0-1)
   initialFontSize?: number; // Initial font size
+  initialFontFamily?: string; // Initial font family
   canvasZoom?: number; // Canvas zoom level for mouse coordinate correction
   // A key that changes when the portal host changes (e.g., 'dock' vs 'canvas')
   mountKey?: string;
@@ -49,6 +50,7 @@ export const Terminal = React.forwardRef<any, TerminalProps>(
       initialTheme,
       initialOpacity = 0.2,
       initialFontSize,
+      initialFontFamily,
       canvasZoom = 1,
       mountKey,
       onTitleChange,
@@ -166,7 +168,7 @@ export const Terminal = React.forwardRef<any, TerminalProps>(
 
       // Get font size from settings store or default to 14
       const savedFontSize = initialFontSize || useSettingsStore.getState().terminalDefaultFontSize;
-      const savedFontFamily = useSettingsStore.getState().terminalDefaultFontFamily;
+      const savedFontFamily = initialFontFamily || useSettingsStore.getState().terminalDefaultFontFamily;
 
       // Special settings for TUI tools to improve rendering
       const xtermOptions: any = {
@@ -1038,6 +1040,31 @@ export const Terminal = React.forwardRef<any, TerminalProps>(
         try {
           xtermRef.current?.reset();
         } catch {}
+      },
+      refit: () => {
+        if (fitAddonRef.current && xtermRef.current) {
+          try {
+            // Fit the terminal to its container
+            fitAddonRef.current.fit();
+
+            // Refresh the display
+            xtermRef.current.refresh(0, xtermRef.current.rows - 1);
+
+            // Send new dimensions to backend
+            if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+              wsRef.current.send(
+                JSON.stringify({
+                  type: "resize",
+                  terminalId: agent.id,
+                  cols: xtermRef.current.cols,
+                  rows: xtermRef.current.rows,
+                }),
+              );
+            }
+          } catch (err) {
+            console.error('[Terminal] Refit error:', err);
+          }
+        }
       },
     }));
 
