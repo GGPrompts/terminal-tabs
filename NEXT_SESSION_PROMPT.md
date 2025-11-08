@@ -531,7 +531,83 @@ style={{
 **Last Updated:** November 8, 2025 - Evening (120k tokens used)
 **Status:** ✅ PERSISTENCE FULLY WORKING! All terminals persist through refresh with proper rendering!
 **Dev Server:** Running at http://localhost:5174/
-**Next Step:** Test thoroughly - spawn multiple terminals, customize them, refresh, verify all render!
+
+---
+
+## 🎨 Next Session Task: Footer Layout Cleanup
+
+### Problem
+Current footer layout is awkward on ultra-wide screens:
+- Terminal info (icon, name, type) is spread across the width (left/center/right aligned)
+- Controls are on a second row
+- Takes up 2 rows of vertical space
+
+### Desired Layout
+**Single-row layout:**
+```
+[Icon] Terminal Name (type)          [-] 16px [+]  🔄  🎨  ✕
+└─ Left aligned (grouped)             └─ Right aligned ────┘
+```
+
+### Implementation
+**File:** `src/SimpleTerminalApp.css`
+
+**Current structure:**
+```tsx
+<div className="app-footer">
+  <div className="footer-terminal-info">     // Left side
+    <span className="footer-terminal-icon">🤖</span>
+    <span className="footer-terminal-name">Claude Code</span>
+    <span className="footer-terminal-type">(claude-code)</span>
+    {/* PID info */}
+  </div>
+  <div className="footer-controls">          // Controls (separate row?)
+    {/* Font size, refit, customize, close */}
+  </div>
+</div>
+```
+
+**Changes needed:**
+1. Make `.app-footer` a single-row flexbox with `justify-content: space-between`
+2. Remove any flex-wrap or multi-row behavior
+3. Group terminal info tightly on left (no center/right alignment spreading)
+4. Keep controls compact on right
+5. Ensure it's responsive (may need to stack on mobile)
+
+**CSS approach:**
+```css
+.app-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.5rem 1rem;
+  height: 40px; /* Fixed single-row height */
+}
+
+.footer-terminal-info {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem; /* Tight grouping */
+}
+
+.footer-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+```
+
+**Estimate:** 15-20 minutes
+
+### Testing
+- ✅ Looks good on ultra-wide (3440x1440)
+- ✅ Looks good on standard desktop (1920x1080)
+- ✅ Looks good on laptop (1366x768)
+- ✅ Responsive on mobile (stack if needed)
+
+---
+
+**Next Step:** Test persistence, then implement footer cleanup in next session!
 
 ---
 
