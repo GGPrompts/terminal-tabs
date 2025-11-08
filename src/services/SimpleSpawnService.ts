@@ -4,6 +4,10 @@
 
 interface SpawnConfig {
   terminalType: string
+  command?: string
+  commands?: string[]  // Array of commands to execute (like opustrator)
+  startCommand?: string  // For reconnection
+  toolName?: string  // For TUI tools
   name?: string
   workingDir?: string
   theme?: string
@@ -33,7 +37,7 @@ class SimpleSpawnService {
     return null
   }
 
-  async spawn(options: { config: SpawnConfig }): Promise<string | null> {
+  async spawn(options: { config: SpawnConfig; requestId?: string }): Promise<string | null> {
     try {
       const ws = this.getWebSocket()
       if (!ws) {
@@ -47,7 +51,8 @@ class SimpleSpawnService {
         size: options.config.size || { width: 800, height: 600 },
       }
 
-      const requestId = `spawn-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+      // Use provided requestId or generate new one
+      const requestId = options.requestId || `spawn-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
 
       const spawnMessage = {
         type: 'spawn',
@@ -55,6 +60,7 @@ class SimpleSpawnService {
         config: spawnConfig,
       }
 
+      console.log('[SimpleSpawnService] Sending spawn message:', spawnMessage)
       ws.send(JSON.stringify(spawnMessage))
 
       // Return immediately - terminal will appear via WebSocket 'terminal-spawned' message

@@ -36,6 +36,28 @@
   gap: 12px;
 }
 
+.settings-button {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #aaa;
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 16px;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.settings-button:hover {
+  background: rgba(100, 150, 255, 0.2);
+  border-color: rgba(100, 150, 255, 0.4);
+  color: #8cf;
+  transform: rotate(45deg);
+}
+
 .connection-status {
   display: flex;
   align-items: center;
@@ -283,6 +305,20 @@
   font-size: 14px;
   font-weight: 500;
   margin-bottom: 2px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.default-badge {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 6px;
+  background: rgba(245, 158, 11, 0.2);
+  border: 1px solid rgba(245, 158, 11, 0.4);
+  border-radius: 4px;
+  color: #f59e0b;
+  letter-spacing: 0.5px;
 }
 
 .spawn-description {
@@ -374,4 +410,80 @@
 .loading-text {
   font-size: 14px;
   color: rgba(255, 255, 255, 0.5);
+}
+
+/* App Footer - Terminal Info Bar */
+.app-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 16px;
+  background: #000000;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.7);
+  min-height: 32px;
+  flex-shrink: 0;
+}
+
+.footer-terminal-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.footer-terminal-icon {
+  font-size: 16px;
+  line-height: 1;
+}
+
+.footer-terminal-name {
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.footer-terminal-type {
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 12px;
+}
+
+.footer-terminal-pid {
+  margin-left: 8px;
+  color: rgba(255, 255, 255, 0.4);
+  font-size: 11px;
+  font-family: 'Monaco', 'Menlo', 'Courier New', monospace;
+}
+
+.footer-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.footer-action-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+  color: rgba(255, 255, 255, 0.7);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-size: 14px;
+  padding: 0;
+}
+
+.footer-action-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.2);
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.footer-action-btn.footer-close:hover {
+  background: rgba(239, 68, 68, 0.2);
+  border-color: rgba(239, 68, 68, 0.3);
+  color: #ef4444;
 }

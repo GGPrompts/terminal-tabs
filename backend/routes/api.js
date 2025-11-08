@@ -25,7 +25,7 @@ const terminalTypes = unifiedSpawn.getTerminalTypes();
 const spawnAgentSchema = Joi.object({
   name: Joi.string().min(1).max(50).optional(),
   terminalType: Joi.string().valid(...terminalTypes).required(),
-  platform: Joi.string().valid('docker', 'local').default('docker'),
+  platform: Joi.string().valid('docker', 'local').default('local'),
   workingDir: Joi.string().optional(),
   resumable: Joi.boolean().default(false),
   color: Joi.string().pattern(/^#[0-9a-fA-F]{6}$/).optional(),
@@ -147,7 +147,7 @@ router.get('/spawn-options', asyncHandler(async (req, res) => {
   const path = require('path');
 
   try {
-    const spawnOptionsPath = path.join(__dirname, '../../spawn-options.json');
+    const spawnOptionsPath = path.join(__dirname, '../../public/spawn-options.json');
     const data = await fs.readFile(spawnOptionsPath, 'utf-8');
     const spawnConfig = JSON.parse(data);
 
@@ -159,6 +159,47 @@ router.get('/spawn-options', asyncHandler(async (req, res) => {
   } catch (error) {
     res.status(500).json({
       error: 'Failed to load spawn options',
+      message: error.message
+    });
+  }
+}));
+
+/**
+ * PUT /api/spawn-options - Save spawn options to spawn-options.json
+ */
+router.put('/spawn-options', asyncHandler(async (req, res) => {
+  const fs = require('fs').promises;
+  const path = require('path');
+
+  try {
+    const { spawnOptions } = req.body;
+
+    if (!Array.isArray(spawnOptions)) {
+      return res.status(400).json({
+        error: 'Invalid format',
+        message: 'spawnOptions must be an array'
+      });
+    }
+
+    const spawnOptionsPath = path.join(__dirname, '../../public/spawn-options.json');
+    const configData = {
+      spawnOptions
+    };
+
+    await fs.writeFile(
+      spawnOptionsPath,
+      JSON.stringify(configData, null, 2),
+      'utf-8'
+    );
+
+    res.json({
+      success: true,
+      message: 'Spawn options saved successfully',
+      count: spawnOptions.length
+    });
+  } catch (error) {
+    res.status(500).json({
+      error: 'Failed to save spawn options',
       message: error.message
     });
   }

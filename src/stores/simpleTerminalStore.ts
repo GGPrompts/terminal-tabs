@@ -14,6 +14,7 @@ export interface Terminal {
   sessionName?: string;
   createdAt: number;
   status?: 'spawning' | 'active' | 'closed' | 'error';
+  requestId?: string; // For matching placeholder with WebSocket response
 }
 
 interface SimpleTerminalState {

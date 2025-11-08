@@ -156,7 +156,11 @@ wss.on('connection', (ws) => {
             console.log('[WS] Spawning Gemini terminal with config:', data.config);
           }
           // Use UnifiedSpawn for better validation and rate limiting
-          const result = await unifiedSpawn.spawn(data.config);
+          // Pass requestId from frontend if provided
+          const result = await unifiedSpawn.spawn({
+            ...data.config,
+            requestId: data.requestId
+          });
           if (result.success) {
             // Track this terminal for this connection
             connectionTerminals.add(result.terminal.id);

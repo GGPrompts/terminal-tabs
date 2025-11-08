@@ -10,7 +10,12 @@ dist/
 *.log
 npm-debug.log*
 backend/logs/
+logs/
 *.log.*
+
+# Launch script artifacts
+.backend.pid
+.frontend.pid
 
 # Environment
 .env

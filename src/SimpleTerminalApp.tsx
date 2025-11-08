@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react'
 import './SimpleTerminalApp.css'
 import { Terminal } from './components/Terminal'
+import { SettingsModal } from './components/SettingsModal'
 import { Agent, TERMINAL_TYPES } from './types'
 import { useSimpleTerminalStore, Terminal as StoredTerminal } from './stores/simpleTerminalStore'
 import SimpleSpawnService from './services/SimpleSpawnService'
@@ -11,7 +12,7 @@ interface SpawnOption {
   terminalType: string
   icon: string
   description: string
-  defaultSize?: { width: number; height: number }
+  workingDir?: string
   defaultTheme?: string
   defaultTransparency?: number
 }
@@ -20,11 +21,13 @@ function SimpleTerminalApp() {
   const [webSocketAgents, setWebSocketAgents] = useState<Agent[]>([])
   const [connectionStatus, setConnectionStatus] = useState<'connected' | 'disconnected' | 'connecting'>('disconnected')
   const [showSpawnMenu, setShowSpawnMenu] = useState(false)
+  const [showSettings, setShowSettings] = useState(false)
   const [spawnOptions, setSpawnOptions] = useState<SpawnOption[]>([])
   const wsRef = useRef<WebSocket | null>(null)
-  const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [reconnectAttempts, setReconnectAttempts] = useState(0)
   const processedAgentIds = useRef<Set<string>>(new Set())
+  const pendingSpawns = useRef<Map<string, StoredTerminal>>(new Map()) // Track pending spawns by requestId
 
   const {
     terminals: storedTerminals,
@@ -33,6 +36,7 @@ function SimpleTerminalApp() {
     removeTerminal,
     updateTerminal,
     setActiveTerminal,
+    clearAllTerminals,
   } = useSimpleTerminalStore()
 
   // Merge WebSocket agents with stored terminals
@@ -62,8 +66,8 @@ function SimpleTerminalApp() {
     return result
   }, [webSocketAgents, storedTerminals])
 
-  // Load spawn options
-  useEffect(() => {
+  // Load spawn options from JSON file
+  const loadSpawnOptions = () => {
     fetch('/spawn-options.json')
       .then(res => res.json())
       .then(data => {
@@ -71,7 +75,11 @@ function SimpleTerminalApp() {
           setSpawnOptions(data.spawnOptions)
         }
       })
-      .catch(err => console.error('❌ Failed to load spawn options:', err))
+      .catch(err => console.error('Failed to load spawn options:', err))
+  }
+
+  useEffect(() => {
+    loadSpawnOptions()
   }, [])
 
   // Initialize WebSocket
@@ -106,10 +114,14 @@ function SimpleTerminalApp() {
         return
       }
 
-      // Ctrl+T - New terminal (show spawn menu)
+      // Ctrl+T - Spawn first option (default)
       if (e.ctrlKey && e.key === 't') {
         e.preventDefault()
-        setShowSpawnMenu(prev => !prev)
+        if (spawnOptions.length > 0) {
+          handleSpawnTerminal(spawnOptions[0])
+        } else {
+          setShowSpawnMenu(prev => !prev)
+        }
         return
       }
 
@@ -156,11 +168,11 @@ function SimpleTerminalApp() {
       if (e.ctrlKey && e.shiftKey && e.key === 'T') {
         e.preventDefault()
         if (lastClosedTerminalRef.current) {
-          const spawnOption = spawnOptions.find(
+          const option = spawnOptions.find(
             opt => opt.terminalType === lastClosedTerminalRef.current!.terminalType
           )
-          if (spawnOption) {
-            handleSpawnTerminal(spawnOption)
+          if (option) {
+            handleSpawnTerminal(option)
           }
         }
         return
@@ -205,6 +217,12 @@ function SimpleTerminalApp() {
     ws.onopen = () => {
       setConnectionStatus('connected')
       setReconnectAttempts(0)
+
+      // Clear any stale terminals from localStorage on fresh connection
+      // These are terminals from previous sessions that no longer exist on backend
+      if (storedTerminals.length > 0) {
+        clearAllTerminals()
+      }
     }
 
     ws.onclose = (evt) => {
@@ -271,31 +289,65 @@ function SimpleTerminalApp() {
             }]
           })
 
-          // Check if this agent already has a stored terminal
-          let existingTerminal = storedTerminals.find(t => t.agentId === message.data.id)
+          // Debug: Show all stored terminals and what we're looking for
+          console.log('[SimpleTerminalApp] Looking for requestId:', message.requestId)
+          console.log('[SimpleTerminalApp] Stored terminals:', storedTerminals.map(t => ({
+            id: t.id,
+            requestId: t.requestId,
+            status: t.status,
+            type: t.terminalType
+          })))
+          console.log('[SimpleTerminalApp] Pending spawns:', Array.from(pendingSpawns.current.keys()))
 
-          // If not found by agentId, find the most recent spawning terminal of same type
+          // FIRST: Check pendingSpawns ref (synchronous, no race condition!)
+          let existingTerminal = pendingSpawns.current.get(message.requestId)
+          console.log('[SimpleTerminalApp] Found in pendingSpawns ref?', !!existingTerminal)
+
+          // SECOND: Check state (in case ref was cleared but state updated)
+          if (!existingTerminal) {
+            existingTerminal = storedTerminals.find(t => t.requestId === message.requestId)
+            console.log('[SimpleTerminalApp] Found in state by requestId?', !!existingTerminal)
+          }
+
+          // Fallback 1: Check if this agent already has a stored terminal
+          if (!existingTerminal) {
+            existingTerminal = storedTerminals.find(t => t.agentId === message.data.id)
+            console.log('[SimpleTerminalApp] Found by agentId?', !!existingTerminal)
+          }
+
+          // Fallback 2: Find the most recent spawning terminal of same type (for reconnections)
           if (!existingTerminal) {
             existingTerminal = storedTerminals
               .filter(t => t.status === 'spawning' && t.terminalType === message.data.terminalType)
               .sort((a, b) => b.createdAt - a.createdAt)[0]
+            console.log('[SimpleTerminalApp] Found by type?', !!existingTerminal)
           }
 
           if (existingTerminal) {
+            console.log('[SimpleTerminalApp] ✅ Matched terminal:', existingTerminal.id, 'requestId:', message.requestId)
+
+            // Clear from pending spawns ref
+            if (message.requestId) {
+              pendingSpawns.current.delete(message.requestId)
+              console.log('[SimpleTerminalApp] Cleared from pendingSpawns ref')
+            }
+
             // Update existing terminal with agent info
             updateTerminal(existingTerminal.id, {
               agentId: message.data.id,
               sessionName: message.data.sessionName,
               status: 'active',
+              requestId: undefined, // Clear requestId after matching
             })
           } else {
-            // Fallback: create new terminal if none found (shouldn't happen normally)
-            const spawnOption = spawnOptions.find(opt => opt.terminalType === message.data.terminalType)
+            // This should rarely happen now that we match by requestId
+            console.warn('[SimpleTerminalApp] No matching terminal found for requestId:', message.requestId)
+            const option = spawnOptions.find(opt => opt.terminalType === message.data.terminalType)
             const newTerminal: StoredTerminal = {
               id: `terminal-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
               name: message.data.name || message.data.terminalType,
               terminalType: message.data.terminalType,
-              icon: spawnOption?.icon,
+              icon: option?.icon,
               agentId: message.data.id,
               workingDir: message.data.workingDir,
               sessionName: message.data.sessionName,
@@ -339,41 +391,65 @@ function SimpleTerminalApp() {
   const handleSpawnTerminal = async (option: SpawnOption) => {
     setShowSpawnMenu(false)
 
-    // Create terminal with 'spawning' status immediately for better UX
-    const newTerminal: StoredTerminal = {
-      id: `terminal-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-      name: option.label,
-      terminalType: option.terminalType,
-      icon: option.icon,
-      workingDir: '/home/matt',
-      theme: option.defaultTheme,
-      transparency: option.defaultTransparency,
-      createdAt: Date.now(),
-      status: 'spawning',
-    }
-    addTerminal(newTerminal)
-
     try {
-      const config = {
-        terminalType: option.terminalType,
+      // Generate requestId FIRST
+      const requestId = `spawn-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+
+      // Create placeholder terminal IMMEDIATELY (before spawn)
+      const newTerminal: StoredTerminal = {
+        id: `terminal-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
         name: option.label,
-        workingDir: '/home/matt',  // Default working directory
+        terminalType: option.terminalType,
+        icon: option.icon,
+        workingDir: option.workingDir || '~',
         theme: option.defaultTheme,
         transparency: option.defaultTransparency,
-        size: option.defaultSize || { width: 800, height: 600 },
+        createdAt: Date.now(),
+        status: 'spawning',
+        requestId, // Store requestId for matching with WebSocket response
       }
 
-      // SimpleSpawnService.spawn() returns Promise<string | null> (terminal ID)
-      const terminalId = await SimpleSpawnService.spawn({ config })
+      // Store in ref FIRST (synchronous, no race condition)
+      pendingSpawns.current.set(requestId, newTerminal)
 
-      if (!terminalId) {
-        console.error('❌ Failed to spawn terminal')
+      // Then add to state (async)
+      addTerminal(newTerminal)
+      console.log('[SimpleTerminalApp] Created placeholder terminal with requestId:', requestId)
+
+      // Build config
+      const config: any = {
+        terminalType: option.terminalType,
+        name: option.label,
+        workingDir: option.workingDir || '~',
+        theme: option.defaultTheme,
+        transparency: option.defaultTransparency,
+        size: { width: 800, height: 600 },
+      }
+
+      // Convert command to commands array (like opustrator)
+      // TUI tools use toolName, others use commands array
+      if (option.terminalType === 'tui-tool') {
+        config.toolName = option.command
+      } else if (option.command) {
+        config.commands = [option.command]
+        config.startCommand = option.command  // For reconnection
+      }
+
+      console.log('[SimpleTerminalApp] Spawning with config:', config)
+
+      // Send spawn request (now we already have the placeholder in state)
+      // We can await here safely because placeholder is already created
+      const returnedRequestId = await SimpleSpawnService.spawn({ config, requestId })
+
+      if (!returnedRequestId) {
+        console.error('Failed to spawn terminal')
         updateTerminal(newTerminal.id, { status: 'error' })
+        return
       }
+
       // Status will be updated to 'active' when WebSocket receives terminal-spawned
     } catch (error) {
-      console.error('❌ Error spawning terminal:', error)
-      updateTerminal(newTerminal.id, { status: 'error' })
+      console.error('Error spawning terminal:', error)
     }
   }
 
@@ -408,6 +484,9 @@ function SimpleTerminalApp() {
   const activeAgent = activeTerminal?.agentId
     ? agents.find(a => a.id === activeTerminal.agentId)
     : null
+  const terminalInfo = activeAgent
+    ? TERMINAL_TYPES.find(t => t.value === activeAgent.terminalType)
+    : null
 
   return (
     <div className="simple-terminal-app">
@@ -415,6 +494,13 @@ function SimpleTerminalApp() {
       <div className="app-header">
         <div className="app-title">Terminal Tabs</div>
         <div className="header-actions">
+          <button
+            className="settings-button"
+            onClick={() => setShowSettings(true)}
+            title="Settings"
+          >
+            ⚙️
+          </button>
           <div className={`connection-status ${connectionStatus}`}>
             <span className="status-dot"></span>
             {connectionStatus}
@@ -452,6 +538,13 @@ function SimpleTerminalApp() {
           +
         </button>
       </div>
+
+      {/* Settings Modal */}
+      <SettingsModal
+        isOpen={showSettings}
+        onClose={() => setShowSettings(false)}
+        onSave={() => loadSpawnOptions()}
+      />
 
       {/* Spawn Menu */}
       {showSpawnMenu && (
@@ -494,7 +587,7 @@ function SimpleTerminalApp() {
             onClose={() => handleCloseTerminal(activeTerminal!.id)}
             onCommand={(cmd) => handleCommand(cmd, activeTerminal!.id)}
             wsRef={wsRef}
-            embedded={false}
+            embedded={true}
           />
         ) : (
           <div className="loading-state">
@@ -503,6 +596,31 @@ function SimpleTerminalApp() {
           </div>
         )}
       </div>
+
+      {/* App Footer - Shows active terminal info */}
+      {activeTerminal && activeAgent && (
+        <div className="app-footer">
+          <div className="footer-terminal-info">
+            <span className="footer-terminal-icon">
+              {terminalInfo?.icon || '💻'}
+            </span>
+            <span className="footer-terminal-name">{activeAgent.name}</span>
+            <span className="footer-terminal-type">({activeAgent.terminalType})</span>
+            {activeAgent.pid && (
+              <span className="footer-terminal-pid">PID: {activeAgent.pid}</span>
+            )}
+          </div>
+          <div className="footer-actions">
+            <button
+              className="footer-action-btn footer-close"
+              onClick={() => handleCloseTerminal(activeTerminal.id)}
+              title="Close terminal"
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

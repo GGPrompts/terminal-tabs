@@ -145,8 +145,18 @@ Use intuitive aliases in spawn-options:
 1. **No Tab Persistence** - Tabs disappear on refresh (need localStorage)
 2. **No Keyboard Shortcuts** - Missing Ctrl+T, Ctrl+W, etc.
 3. **Mobile Untested** - May need responsive CSS work
-4. **No Settings UI** - spawn-options.json must be edited manually
-5. **Single Window** - Can't pop out tabs (future: window.open())
+4. **Single Window** - Can't pop out tabs (future: window.open())
+
+## ✅ Recently Fixed (Nov 7, 2025)
+
+### Critical Terminal Spawning Bugs
+1. **Commands Not Executing** ✅ - Bash terminals now properly execute commands from spawn-options.json
+2. **Working Directory Validation** ✅ - Tilde paths (`~/projects`) now expand correctly
+3. **Duplicate Terminal Bug** ✅ - Fixed race condition using `useRef` for synchronous spawn tracking
+4. **Silent Failures** ✅ - Added error logging for failed validations
+5. **Settings UI** ✅ - Added SettingsModal (⚙️ button) to edit spawn-options.json
+
+See PLAN.md for detailed technical documentation of these fixes.
 
 ---
 

@@ -152,15 +152,11 @@ class UnifiedSpawnSystem {
    * Main spawn method - single entry point for all terminal creation
    */
   async spawn(options) {
-    const requestId = uuidv4();
+    // Use provided requestId from frontend, or generate new one
+    const requestId = options.requestId || uuidv4();
     const startTime = Date.now();
 
-    console.log('[UnifiedSpawn] Spawn request:', {
-      requestId,
-      terminalType: options?.terminalType,
-      platform: options?.platform || 'local',
-      name: options?.name
-    });
+    console.log('[UnifiedSpawn] Spawn request FULL CONFIG:', JSON.stringify(options, null, 2));
     
     // Extra debug for Gemini
     if (options?.terminalType === 'gemini') {
@@ -174,6 +170,7 @@ class UnifiedSpawnSystem {
       // 1. Validate basic options
       const validation = await this.validateSpawnRequest(options);
       if (!validation.valid) {
+        console.error('[UnifiedSpawn] Validation failed:', validation.error);
         return {
           success: false,
           error: validation.error,
@@ -285,8 +282,10 @@ class UnifiedSpawnSystem {
 
     } catch (error) {
       console.error('[UnifiedSpawn] Spawn failed:', error);
+      console.error('[UnifiedSpawn] Error stack:', error.stack);
+      console.error('[UnifiedSpawn] Failed config was:', JSON.stringify(options, null, 2));
       this.spawnsInProgress.delete(requestId);
-      
+
       return {
         success: false,
         error: error.message || 'Failed to spawn terminal',
@@ -314,13 +313,26 @@ class UnifiedSpawnSystem {
     // Validate working directory if provided
     if (options.workingDir) {
       const fs = require('fs').promises;
+      const os = require('os');
+      const path = require('path');
+
+      // Expand ~ to home directory
+      let workingDir = options.workingDir;
+      if (workingDir.startsWith('~/')) {
+        workingDir = path.join(os.homedir(), workingDir.slice(2));
+        options.workingDir = workingDir; // Update the options with expanded path
+      } else if (workingDir === '~') {
+        workingDir = os.homedir();
+        options.workingDir = workingDir;
+      }
+
       try {
-        const stat = await fs.stat(options.workingDir);
+        const stat = await fs.stat(workingDir);
         if (!stat.isDirectory()) {
           return { valid: false, error: 'Working directory must be a directory' };
         }
       } catch (error) {
-        return { valid: false, error: `Working directory does not exist: ${options.workingDir}` };
+        return { valid: false, error: `Working directory does not exist: ${workingDir}` };
       }
     }
 
@@ -459,6 +471,11 @@ class UnifiedSpawnSystem {
       config.toolName = config.toolName || 'custom';
     } else if (terminalType === 'dashboard') {
       config.command = config.dashboardScript || 'echo "Dashboard terminal ready"';
+    }
+    // Handle bash terminals with commands array (TFE, Micro Editor, etc.)
+    else if (terminalType === 'bash' && config.commands && config.commands.length > 0) {
+      config.command = config.commands.join(' && ');  // Join multiple commands with &&
+      console.log(`[UnifiedSpawn] Setting bash command from commands array:`, config.command);
     }
 
     // Register terminal
