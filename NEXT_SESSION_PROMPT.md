@@ -979,19 +979,51 @@ After generating the report:
 2. Ask if I want to proceed with Phase 1 removals
 3. Wait for approval before making any changes
 
+**Phase 5: Commit & Push the Report**
+
+After completing the audit report:
+1. **Commit the report**:
+   ```bash
+   git add OPUSTRATOR_LEGACY_AUDIT.md
+   git commit -m "docs: comprehensive Opustrator legacy code audit report
+
+   Generated detailed audit of codebase for Opustrator legacy code:
+   - Identified X safe-to-remove items (low risk)
+   - Identified Y investigate-further items (medium risk)
+   - Documented Z core modules to keep
+   - Included cleanup plan with risk assessment
+   - Provided code diff previews for review
+
+   Ready for review and approval before proceeding with cleanup.
+
+   🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+   Co-Authored-By: Claude <noreply@anthropic.com>"
+   ```
+
+2. **Push to remote**:
+   ```bash
+   git push
+   ```
+
+3. **Confirm to user**: "✅ Audit report committed and pushed! Ready for review in the morning."
+
 **Tools to Use:**
 - `Grep` - Search for references
 - `Read` - Examine files
 - `Glob` - Find file patterns
 - `Task` with `subagent_type=Explore` for deep codebase exploration
+- `Bash` - For git commit/push
 
 **IMPORTANT:**
 - Do NOT remove anything without explicit approval
 - Be thorough - check every reference
 - Consider user's workflow (they use TFE, Claude Code, tmux heavily)
 - Prioritize safety over aggressive cleanup
+- MUST commit and push the report when finished
 
 ---
 
 **Deliverable for Morning:**
 `OPUSTRATOR_LEGACY_AUDIT.md` - Comprehensive report ready for review over coffee ☕
+(Will be committed and pushed automatically)
