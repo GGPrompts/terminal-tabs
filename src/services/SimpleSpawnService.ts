@@ -13,6 +13,8 @@ interface SpawnConfig {
   theme?: string
   transparency?: number
   size?: { width: number; height: number }
+  useTmux?: boolean  // Whether to spawn via tmux
+  sessionName?: string  // Tmux session name for persistence
 }
 
 class SimpleSpawnService {

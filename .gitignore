@@ -33,3 +33,4 @@ Thumbs.db
 
 # Workspace data
 workspace-data/
+.logs/

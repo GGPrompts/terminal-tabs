@@ -14,6 +14,7 @@ const cors = require('cors');
 const WebSocket = require('ws');
 const http = require('http');
 const path = require('path');
+const { createModuleLogger } = require('./modules/logger');
 
 // Core modules
 const terminalRegistry = require('./modules/terminal-registry');
@@ -28,6 +29,7 @@ const filesRouter = require('./routes/files');
 
 // Initialize services
 const tuiTools = new TUIToolsManager(terminalRegistry);
+const log = createModuleLogger('Server');
 
 const app = express();
 const server = http.createServer(app);
@@ -66,7 +68,7 @@ const CLEANUP_ON_START = process.env.CLEANUP_ON_START === 'true'; // Default to 
 // Intelligent cleanup function
 async function intelligentCleanup() {
   const terminals = terminalRegistry.getAllTerminals();
-  console.log(`[Server] Running intelligent cleanup on ${terminals.length} terminals`);
+  log.info(`Running intelligent cleanup on ${terminals.length} terminals`);
 
   // First, clean up duplicates
   terminalRegistry.cleanupDuplicates();
@@ -76,7 +78,7 @@ async function intelligentCleanup() {
   terminals.forEach(terminal => {
     const baseName = terminal.name.split('-')[0];
     if (problematicNames.includes(baseName) && terminal.state === 'disconnected') {
-      console.log(`[Server] Cleaning up disconnected terminal: ${terminal.name}`);
+      log.debug(`Cleaning up disconnected terminal: ${terminal.name}`);
       terminalRegistry.closeTerminal(terminal.id);
     }
   });
@@ -86,9 +88,9 @@ if (process.env.FORCE_CLEANUP === 'true') {
   // Force cleanup - immediately kill all terminals
   ptyHandler.cleanupWithGrace(true).then(() => {
     terminalRegistry.cleanup();
-    console.log('[Server] Force cleaned all terminals (FORCE_CLEANUP=true)');
+    log.warn('Force cleaned all terminals (FORCE_CLEANUP=true)');
   }).catch(err => {
-    console.error('[Server] Error during force cleanup:', err);
+    log.error('Error during force cleanup:', err);
   });
 } else if (CLEANUP_ON_START) {
   // Clean start requested
@@ -96,12 +98,12 @@ if (process.env.FORCE_CLEANUP === 'true') {
     // Also do PTY cleanup for any orphaned processes
     return ptyHandler.cleanupWithGrace(false);
   }).then(() => {
-    console.log('[Server] Completed intelligent cleanup (CLEANUP_ON_START=true)');
+    log.success('Completed intelligent cleanup (CLEANUP_ON_START=true)');
   }).catch(err => {
-    console.error('[Server] Error during intelligent cleanup:', err);
+    log.error('Error during intelligent cleanup:', err);
   });
 } else {
-  console.log('[Server] Preserving existing terminals (normal start, CLEANUP_ON_START=false)');
+  log.info('Preserving existing terminals (normal start, CLEANUP_ON_START=false)');
 }
 
 // WebSocket server
@@ -111,7 +113,7 @@ const wss = new WebSocket.Server({ server });
 const activeConnections = new Set();
 
 wss.on('connection', (ws) => {
-  console.log('WebSocket client connected');
+  log.success('WebSocket client connected');
 
   // Add to active connections
   activeConnections.add(ws);
@@ -153,7 +155,7 @@ wss.on('connection', (ws) => {
         case 'spawn':
           // Debug log for Gemini spawn issues
           if (data.config && data.config.terminalType === 'gemini') {
-            console.log('[WS] Spawning Gemini terminal with config:', data.config);
+            log.debug('Spawning Gemini terminal with config:', data.config);
           }
           // Use UnifiedSpawn for better validation and rate limiting
           // Pass requestId from frontend if provided
@@ -164,7 +166,7 @@ wss.on('connection', (ws) => {
           if (result.success) {
             // Track this terminal for this connection
             connectionTerminals.add(result.terminal.id);
-            console.log('[WS] Spawned terminal', {
+            log.success('Spawned terminal', {
               id: result.terminal.id,
               name: result.terminal.name,
               type: result.terminal.terminalType,
@@ -189,7 +191,12 @@ wss.on('connection', (ws) => {
           break;
           
         case 'command':
-          console.log(`[WS] Received command for terminal ${data.terminalId}: "${data.command?.substring(0, 50)}"`)
+          // CRITICAL: Do NOT log command data - it contains ANSI escape sequences that leak to host terminal!
+          // These escape sequences (theme changes, cursor movements, etc.) will be interpreted by
+          // the terminal running the backend, causing colors/themes to change in the host terminal.
+          // Only log the command length and terminal ID (safe data only)
+          const cmdLength = data.command?.length || 0;
+          log.debug(`Command → terminal ${data.terminalId.slice(-8)}: ${cmdLength} bytes`);
           await terminalRegistry.sendCommand(data.terminalId, data.command);
           break;
           
@@ -199,7 +206,7 @@ wss.on('connection', (ws) => {
           
         case 'detach':
           // Power off button: detach from tmux but keep session alive
-          console.log(`[WS] Detaching from terminal ${data.terminalId} (preserving tmux session)`);
+          log.info(`Detaching from terminal ${data.terminalId.slice(-8)} (preserving tmux session)`);
           connectionTerminals.delete(data.terminalId);
           await terminalRegistry.closeTerminal(data.terminalId, false); // Don't force - keep tmux session alive
           broadcast({ type: 'terminal-closed', data: { id: data.terminalId } });
@@ -207,10 +214,40 @@ wss.on('connection', (ws) => {
 
         case 'close':
           // X button: force close and kill tmux session
-          console.log(`[WS] Force closing terminal ${data.terminalId} (killing tmux session)`);
+          log.info(`Force closing terminal ${data.terminalId.slice(-8)} (killing tmux session)`);
           connectionTerminals.delete(data.terminalId);
           await terminalRegistry.closeTerminal(data.terminalId, true); // Force close - kill tmux session
           broadcast({ type: 'terminal-closed', data: { id: data.terminalId } });
+          break;
+
+        case 'query-tmux-sessions':
+          // Query for orphaned tmux sessions that can be reconnected
+          log.info('Querying for orphaned tmux sessions');
+          try {
+            const { execSync } = require('child_process');
+            const tmuxListOutput = execSync('tmux ls -F "#{session_name}" 2>/dev/null || echo ""').toString().trim();
+            const allSessions = tmuxListOutput.split('\n').filter(s => s);
+
+            // Filter for terminal-tabs sessions only
+            const terminalTabsSessions = allSessions.filter(s => s.startsWith('terminal-tabs-'));
+
+            log.info(`Found ${terminalTabsSessions.length} terminal-tabs tmux sessions`, terminalTabsSessions);
+
+            ws.send(JSON.stringify({
+              type: 'tmux-sessions-list',
+              data: {
+                sessions: terminalTabsSessions
+              }
+            }));
+          } catch (error) {
+            console.error('[WS] Error querying tmux sessions:', error);
+            ws.send(JSON.stringify({
+              type: 'tmux-sessions-list',
+              data: {
+                sessions: []
+              }
+            }));
+          }
           break;
 
         case 'reconnect':
@@ -240,7 +277,7 @@ wss.on('connection', (ws) => {
           const terminal = terminalRegistry.getTerminal(data.terminalId);
           if (terminal) {
             terminal.embedded = data.embedded;
-            console.log(`[WS] Updated terminal ${data.terminalId} embedded status to ${data.embedded}`);
+            log.debug(`Updated terminal ${data.terminalId.slice(-8)} embedded status to ${data.embedded}`);
           }
           break;
       }
@@ -320,7 +357,7 @@ function broadcast(message) {
         client.send(data);
       } catch (error) {
         // Remove dead connections
-        console.error('[Server] Error broadcasting to client:', error);
+        log.error('Error broadcasting to client:', error);
         activeConnections.delete(client);
       }
     }
@@ -354,7 +391,7 @@ setInterval(() => {
   });
   
   deadConnections.forEach(ws => {
-    console.log('[Server] Removing dead WebSocket connection');
+    log.debug('Removing dead WebSocket connection');
     activeConnections.delete(ws);
     try {
       ws.terminate();
@@ -386,7 +423,7 @@ setInterval(() => {
 
 // Graceful shutdown handler
 const gracefulShutdown = async () => {
-  console.log('\n[Server] Shutting down gracefully...');
+  log.warn('\nShutting down gracefully...');
   
   // Close all WebSocket connections
   activeConnections.forEach(ws => {
@@ -400,9 +437,9 @@ const gracefulShutdown = async () => {
   
   // Close WebSocket server
   wss.close(() => {
-    console.log('[Server] WebSocket server closed');
+    log.info('WebSocket server closed');
   });
-  
+
   // Clean up terminal registry listeners
   terminalRegistry.removeAllListeners();
 
@@ -410,18 +447,18 @@ const gracefulShutdown = async () => {
   await terminalRegistry.cleanup();
 
   // Note persistence was removed in v3.10 (manual save system)
-  // console.log('[Server] Saving all pending notes...');
+  // log.info('Saving all pending notes...');
   // notePersistence.shutdown();
-  
+
   // Close HTTP server
   server.close(() => {
-    console.log('[Server] HTTP server closed');
+    log.success('HTTP server closed');
     process.exit(0);
   });
-  
+
   // Force exit after 5 seconds
   setTimeout(() => {
-    console.error('[Server] Forced shutdown after timeout');
+    log.error('Forced shutdown after timeout');
     process.exit(1);
   }, 5000);
 };
@@ -433,8 +470,17 @@ process.on('SIGINT', gracefulShutdown);
 // Start server
 const PORT = process.env.PORT || 8127;
 server.listen(PORT, async () => {
-  console.log(`Opustrator running on port ${PORT}`);
-  console.log(`WebSocket server ready`);
+  log.ready('');
+  log.ready('╔════════════════════════════════════════╗');
+  log.ready('║     Terminal Tabs Backend Server      ║');
+  log.ready('╚════════════════════════════════════════╝');
+  log.ready('');
+  log.info(`🚀 HTTP Server listening on port ${PORT}`);
+  log.info(`⚡ WebSocket Server ready`);
+  log.info(`📁 Working directory: ${process.cwd()}`);
+  log.info(`🔧 Log level: ${process.env.LOG_LEVEL || 'info (default)'}`);
+  if (process.env.CLEANUP_ON_START === 'true') log.warn('⚠️  Cleanup on start: ENABLED');
+  log.ready('');
 
   // Initialize note persistence service
 

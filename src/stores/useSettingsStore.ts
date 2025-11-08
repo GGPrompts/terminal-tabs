@@ -56,6 +56,7 @@ interface AppSettings {
   closeTerminalsOnLayoutSwitch: boolean;
   minimapOpacity: number;
   autoReconnectToTmuxSessions: boolean;
+  useTmux: boolean; // Use tmux for all terminal spawns (default true)
 
   // Canvas settings
   canvasTexture: string;
@@ -111,6 +112,7 @@ const defaultSettings: AppSettings = {
   closeTerminalsOnLayoutSwitch: false,
   minimapOpacity: 0.9,
   autoReconnectToTmuxSessions: true, // Set to false to prevent reconnecting to external tmux sessions
+  useTmux: true, // Use tmux by default for better session persistence and resize handling
 
   // Canvas settings
   canvasTexture: "circuit",

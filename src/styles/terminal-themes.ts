@@ -29,7 +29,7 @@ export const terminalThemes: Record<string, TerminalTheme> = {
       magenta: "#bc3fbc",
       cyan: "#11a8cd",
       white: "#e5e5e5",
-      brightBlack: "#666666",
+      brightBlack: "#9ca3af", // Readable gray for metadata/timestamps/diffs
       brightRed: "#f14c4c",
       brightGreen: "#23d18b",
       brightYellow: "#f5f543",
@@ -59,7 +59,7 @@ export const terminalThemes: Record<string, TerminalTheme> = {
       magenta: "#ff00ff",
       cyan: "#00ffff",
       white: "#ffffff",
-      brightBlack: "#555555",
+      brightBlack: "#ffa640", // Neon orange for high visibility
       brightRed: "#ff5588",
       brightGreen: "#55ffaa",
       brightYellow: "#ffff55",
@@ -92,7 +92,7 @@ export const terminalThemes: Record<string, TerminalTheme> = {
       magenta: "#ff44ff",
       cyan: "#44ffff",
       white: "#ffb000",
-      brightBlack: "#664400",
+      brightBlack: "#d4a574", // Light amber/tan for readability
       brightRed: "#ff6666",
       brightGreen: "#66ff66",
       brightYellow: "#ffff66",
@@ -125,7 +125,7 @@ export const terminalThemes: Record<string, TerminalTheme> = {
       magenta: "#ff00ff",
       cyan: "#00ffff",
       white: "#ccffcc",
-      brightBlack: "#003300",
+      brightBlack: "#7dff94", // Bright green for visibility (matches theme)
       brightRed: "#ff3333",
       brightGreen: "#33ff33",
       brightYellow: "#ffff33",
@@ -158,7 +158,7 @@ export const terminalThemes: Record<string, TerminalTheme> = {
       magenta: "#00ff99",
       cyan: "#00ffaa",
       white: "#e0ffe0",
-      brightBlack: "#003300",
+      brightBlack: "#a4ffdd", // Bright teal for visibility
       brightRed: "#ff9dbc",
       brightGreen: "#44ffaa",
       brightYellow: "#aaff44",
@@ -191,7 +191,7 @@ export const terminalThemes: Record<string, TerminalTheme> = {
       magenta: "#ff71ce",
       cyan: "#01cdfe",
       white: "#fffb96",
-      brightBlack: "#333333",
+      brightBlack: "#c9a0dc", // Soft purple for visibility
       brightRed: "#ff4499",
       brightGreen: "#39ffc6",
       brightYellow: "#ffff66",
@@ -224,7 +224,7 @@ export const terminalThemes: Record<string, TerminalTheme> = {
       magenta: "#e040fb",
       cyan: "#18ffff",
       white: "#e0f7fa",
-      brightBlack: "#263238",
+      brightBlack: "#9ed8e8", // Light cyan for visibility
       brightRed: "#ff8a80",
       brightGreen: "#b9f6ca",
       brightYellow: "#ffe57f",
@@ -261,7 +261,7 @@ export const terminalThemes: Record<string, TerminalTheme> = {
       magenta: "#a736d9",
       cyan: "#16b2d5",
       white: "#f7f7f7",
-      brightBlack: "#3d3659",
+      brightBlack: "#bd93f9", // Bright purple for visibility
       brightRed: "#ff5ac4",
       brightGreen: "#6dff3d",
       brightYellow: "#ffdc6d",

@@ -11,6 +11,10 @@
 const pty = require('node-pty');
 const { execSync } = require('child_process');
 const EventEmitter = require('events');
+const path = require('path');
+const { createModuleLogger } = require('./logger');
+
+const log = createModuleLogger('PTY');
 
 class PTYHandler extends EventEmitter {
   constructor() {
@@ -27,6 +31,9 @@ class PTYHandler extends EventEmitter {
     // Track disconnected processes with grace period - terminalId -> timeout
     this.disconnectedProcesses = new Map();
     this.gracePeriodMs = 30000; // 30 seconds grace period
+
+    // Tmux config file path (relative to backend)
+    this.tmuxConfigPath = path.join(__dirname, '../../.tmux-terminal-tabs.conf');
   }
 
   /**
@@ -72,10 +79,14 @@ class PTYHandler extends EventEmitter {
       env = {}
     } = terminalConfig;
 
-    console.log(`[PTYHandler] Creating PTY for ${name} (${terminalType}), ID: ${id}, useTmux: ${terminalConfig.useTmux}, sessionName: ${terminalConfig.sessionName}`);
+    log.info(`Creating PTY: ${name} (${terminalType})`, {
+      id: id.slice(-8),
+      useTmux: terminalConfig.useTmux,
+      sessionName: terminalConfig.sessionName
+    });
     // Debug Gemini terminal type
     if (terminalType === 'gemini') {
-      console.log(`[PTYHandler] Gemini terminal detected - will execute 'gemini' command after spawn`);
+      log.debug('Gemini terminal detected - will execute gemini command after spawn');
     }
 
     // Check if this is a TUI tool that needs special environment settings
@@ -125,50 +136,53 @@ class PTYHandler extends EventEmitter {
       if (terminalConfig.useTmux) {
         // Check if this is a reconnection to existing session
         const requestedSession = terminalConfig.sessionName;
-        console.log(`[PTYHandler] Checking tmux session: ${requestedSession}`);
+        log.debug(`Checking tmux session: ${requestedSession}`);
         const sessionExists = requestedSession && this.tmuxSessionExists(requestedSession);
-        console.log(`[PTYHandler] Session exists check: ${sessionExists}`);
+        log.debug(`Session exists: ${sessionExists}`);
 
         if (sessionExists) {
           // RECONNECTION: Just attach to existing session
           isReconnection = true;
           sessionName = requestedSession;
-          console.log(`[PTYHandler] 🔄 Reconnecting to existing tmux session: ${sessionName}`);
+          log.success(`🔄 Reconnecting to tmux session: ${sessionName}`);
 
           // CRITICAL FIX: Clean up any old PTY for this session (even if disconnect is in progress)
-          console.log(`[PTYHandler] Searching for old PTYs with session: ${sessionName}`);
+          log.debug(`Searching for old PTYs with session: ${sessionName}`);
           for (const [existingId, existingPty] of this.processes.entries()) {
-            console.log(`[PTYHandler] Checking PTY ${existingId}: tmuxSession=${existingPty.tmuxSession}, status=${existingPty.status}`);
+            log.debug(`Checking PTY ${existingId.slice(-8)}: session=${existingPty.tmuxSession}, status=${existingPty.status}`);
 
             if (existingPty.tmuxSession === sessionName && existingId !== id) {
-              console.log(`[PTYHandler] 🧹 Found old PTY ${existingId} for session ${sessionName}, cleaning up...`);
+              log.info(`🧹 Found old PTY for session ${sessionName}, cleaning up...`);
 
               // Cancel grace period timer if it exists
               if (this.disconnectedProcesses.has(existingId)) {
                 clearTimeout(this.disconnectedProcesses.get(existingId));
                 this.disconnectedProcesses.delete(existingId);
-                console.log(`[PTYHandler] ✅ Canceled grace period timer for ${existingId}`);
+                log.debug('Canceled grace period timer');
               }
 
               // Remove the old PTY attachment (but tmux session stays alive)
               this.processes.delete(existingId);
-              console.log(`[PTYHandler] ✅ Old PTY ${existingId} removed from processes Map`);
+              log.debug('Old PTY removed from processes');
             }
           }
-          console.log(`[PTYHandler] Finished cleaning up old PTYs for session ${sessionName}`);
+          log.debug(`Finished cleaning up old PTYs for session ${sessionName}`);
         } else {
           // NEW SESSION: Generate unique name and create
           const baseName = requestedSession || name || 'term';
           sessionName = this.generateUniqueSessionName(baseName);
-          console.log(`[PTYHandler] Creating new tmux session: ${sessionName}`);
+          log.info(`✨ Creating new tmux session: ${sessionName}`);
 
           try {
-            execSync(`tmux new-session -d -s "${sessionName}" -c "${validWorkingDir}" -x ${cols} -y ${rows}`, {
+            // Use custom tmux config for optimal terminal experience
+            const tmuxCmd = `tmux -f "${this.tmuxConfigPath}" new-session -d -s "${sessionName}" -c "${validWorkingDir}" -x ${cols} -y ${rows}`;
+            log.debug(`Using tmux config: ${this.tmuxConfigPath}`);
+            execSync(tmuxCmd, {
               env: enhancedEnv
             });
-            console.log(`[PTYHandler] Tmux session created: ${sessionName}`);
+            log.success(`Tmux session created: ${sessionName}`);
           } catch (tmuxError) {
-            console.error(`[PTYHandler] Failed to create tmux session:`, tmuxError);
+            log.error('Failed to create tmux session:', tmuxError);
             throw new Error(`Failed to create tmux session: ${tmuxError.message}`);
           }
         }
@@ -215,19 +229,19 @@ class PTYHandler extends EventEmitter {
         useTmux: terminalConfig.useTmux || false
       };
 
-      console.log(`[PTYHandler] 💾 Storing PTY ${id} with status="${ptyInfo.status}", tmuxSession="${sessionName}", isReconnection=${isReconnection}`);
+      log.debug(`💾 Storing PTY ${id.slice(-8)}: status="${ptyInfo.status}", tmux="${sessionName}", reconnect=${isReconnection}`);
       this.processes.set(id, ptyInfo);
-      console.log(`[PTYHandler] ✅ PTY ${id} stored successfully. Total PTYs: ${this.processes.size}`);
+      log.debug(`PTY stored successfully. Total PTYs: ${this.processes.size}`);
 
       // Setup event handlers
       this.setupEventHandlers(ptyInfo);
 
       // Auto-execute terminal type specific commands (SKIP for reconnections!)
       if (!isReconnection) {
-        console.log(`[PTYHandler] New session - calling autoExecuteCommand for ${terminalType}`);
+        log.debug(`New session - calling autoExecuteCommand for ${terminalType}`);
         this.autoExecuteCommand(terminalType, ptyProcess, terminalConfig);
       } else {
-        console.log(`[PTYHandler] Reconnection - skipping autoExecuteCommand (session already running)`);
+        log.debug('Reconnection - skipping autoExecuteCommand (session already running)');
       }
       
       // For bash terminals, force a small write to trigger initial prompt display (SKIP for reconnections!)
@@ -238,11 +252,11 @@ class PTYHandler extends EventEmitter {
         }, 100);
       }
 
-      console.log(`[PTYHandler] Created PTY for ${name}: PID ${ptyProcess.pid}`);
+      log.success(`PTY created: ${name} (PID ${ptyProcess.pid})`);
       return ptyInfo;
 
     } catch (error) {
-      console.error(`[PTYHandler] Failed to create PTY for ${name}:`, error);
+      log.error(`Failed to create PTY for ${name}:`, error);
       throw new Error(`Failed to create PTY process: ${error.message}`);
     }
   }
@@ -262,38 +276,40 @@ class PTYHandler extends EventEmitter {
     // Use consistent delay for all terminals to ensure proper initialization
     // This helps with mouse support, scrollback, and other terminal features
     const delay = 1200; // Standardized delay for all terminal types
-    
-    console.log(`[PTYHandler] Setting up auto-execute for ${terminalType} with ${delay}ms delay`);
-    
+
+    log.debug(`Setting up auto-execute for ${terminalType} with ${delay}ms delay`);
+
     // Delay to ensure PTY is ready
     setTimeout(() => {
-      console.log(`[PTYHandler] Auto-execute timer fired for ${terminalType}`);
+      log.debug(`Auto-execute timer fired for ${terminalType}`);
       try {
         // First check if there's a custom commands array in the config
         if (terminalConfig && terminalConfig.commands && Array.isArray(terminalConfig.commands)) {
+          log.debug(`Executing ${terminalConfig.commands.length} custom command(s)`);
           terminalConfig.commands.forEach(raw => {
             const cmd = typeof raw === 'string' ? raw : ''
             if (cmd !== undefined) {
               const toWrite = cmd.endsWith('\n') ? cmd : (cmd + '\n')
-              console.log(`[PTYHandler] Executing custom command: ${toWrite.trim()}`);
+              // Don't log command content - may contain escape sequences!
               ptyProcess.write(toWrite);
             }
           });
           return;
         }
-        
+
         // Check for single command string (but skip for types with auto-execute)
         const autoExecuteTypes = ['claude-code', 'opencode', 'codex', 'gemini', 'docker-ai', 'orchestrator'];
         if (terminalConfig && terminalConfig.command && !autoExecuteTypes.includes(terminalType)) {
           const cmd = typeof terminalConfig.command === 'string' ? terminalConfig.command : ''
           const toWrite = cmd.endsWith('\n') ? cmd : (cmd + '\n')
-          console.log(`[PTYHandler] Executing custom command: ${toWrite.trim()}`);
+          log.debug(`Executing custom command for ${terminalType}`);
+          // Don't log command content - may contain escape sequences!
           ptyProcess.write(toWrite);
           return;
         }
-        
+
         // Otherwise use default commands for known terminal types
-        console.log(`[PTYHandler] Looking for default command for terminal type: ${terminalType}`);
+        log.debug(`Looking for default command for terminal type: ${terminalType}`);
 
         // Check if there's a prompt/startCommand to pass to AI terminals
         const prompt = terminalConfig?.prompt || terminalConfig?.startCommand || '';
@@ -311,28 +327,22 @@ class PTYHandler extends EventEmitter {
         };
         
         const command = commands[terminalType];
-        console.log(`[PTYHandler] Command for ${terminalType}: ${command ? command.trim() : 'none'}`);
         if (command) {
-          console.log(`[PTYHandler] Auto-executing ${terminalType} command: ${command.trim()}`);
-          // Extra debug for Gemini
-          if (terminalType === 'gemini') {
-            console.log(`[PTYHandler] Gemini terminal executing command: '${command.trim()}' (should be 'gemini')`);
-            console.log(`[PTYHandler] Writing to PTY process now...`);
-          }
+          log.debug(`Auto-executing ${terminalType} startup command`);
+          // Don't log command content - it's just the command name but let's be consistent
           ptyProcess.write(command);
-          console.log(`[PTYHandler] Command written to PTY for ${terminalType}`);
+          log.debug(`Startup command sent to PTY for ${terminalType}`);
         } else {
-          console.log(`[PTYHandler] No auto-command for terminal type: ${terminalType}`);
-          // Log what types ARE in the commands object
-          console.log(`[PTYHandler] Available command types:`, Object.keys(commands));
-          
+          log.debug(`No auto-command for terminal type: ${terminalType}`);
+          log.debug('Available command types:', Object.keys(commands));
+
           // Check if this might be a gemini terminal with wrong type
           if (terminalConfig.name && terminalConfig.name.includes('gemini')) {
-            console.log(`[PTYHandler] WARNING: Terminal name contains 'gemini' but type is '${terminalType}'`);
+            log.warn(`Terminal name contains 'gemini' but type is '${terminalType}'`);
           }
         }
       } catch (error) {
-        console.error(`[PTYHandler] Error executing startup command:`, error);
+        log.error('Error executing startup command:', error);
       }
     }, delay); // Consistent delay for proper terminal initialization
   }
@@ -353,7 +363,7 @@ class PTYHandler extends EventEmitter {
     };
 
     const exitHandler = (exitCode, signal) => {
-      console.log(`[PTYHandler] PTY ${name} exited: code=${exitCode}, signal=${signal}`);
+      log.info(`PTY ${name} exited: code=${exitCode}, signal=${signal}`);
       
       // Clean up handlers to prevent memory leaks
       this.cleanupHandlers(ptyInfo);
@@ -409,34 +419,36 @@ class PTYHandler extends EventEmitter {
    * Write data to PTY process
    */
   writeData(terminalId, data) {
-    console.log(`[PTYHandler] 📥 Received input for terminal ${terminalId}, data length: ${data.length}`);
+    // Only log length, NEVER log the actual data (contains escape sequences that leak to host terminal!)
+    // console.log(`[PTYHandler] 📥 Input for terminal ${terminalId}: ${data.length} bytes`);
 
     const ptyInfo = this.processes.get(terminalId);
     if (!ptyInfo) {
-      console.error(`[PTYHandler] ❌ PTY ${terminalId} not found in processes Map`);
-      console.log(`[PTYHandler] Available PTYs:`, Array.from(this.processes.keys()));
+      log.error(`❌ PTY ${terminalId.slice(-8)} not found in processes`);
+      log.debug('Available PTYs:', Array.from(this.processes.keys()).map(id => id.slice(-8)));
       throw new Error(`PTY process ${terminalId} not found`);
     }
 
-    console.log(`[PTYHandler] PTY ${terminalId} found. Status: "${ptyInfo.status}", Name: ${ptyInfo.name}, tmuxSession: ${ptyInfo.tmuxSession}`);
+    // Commented out to reduce log noise
+    // console.log(`[PTYHandler] PTY ${terminalId} found. Status: "${ptyInfo.status}", Name: ${ptyInfo.name}, tmuxSession: ${ptyInfo.tmuxSession}`);
 
     if (ptyInfo.status !== 'active') {
-      console.error(`[PTYHandler] ❌ PTY ${terminalId} is not active (status: ${ptyInfo.status})`);
-      console.log(`[PTYHandler] PTY info:`, {
-        id: ptyInfo.id,
+      log.error(`❌ PTY ${terminalId.slice(-8)} is not active (status: ${ptyInfo.status})`);
+      log.debug('PTY info:', {
+        id: ptyInfo.id.slice(-8),
         name: ptyInfo.name,
         status: ptyInfo.status,
-        tmuxSession: ptyInfo.tmuxSession,
-        createdAt: ptyInfo.createdAt
+        tmuxSession: ptyInfo.tmuxSession
       });
       throw new Error(`PTY process ${terminalId} is not active (status: ${ptyInfo.status})`);
     }
 
     try {
       ptyInfo.process.write(data);
-      console.log(`[PTYHandler] ✅ Successfully wrote ${data.length} bytes to PTY ${terminalId}`);
+      // Commented out to prevent escape sequence leakage AND reduce log noise
+      // log.debug(`Wrote ${data.length} bytes to PTY ${terminalId.slice(-8)}`);
     } catch (error) {
-      console.error(`[PTYHandler] ❌ Error writing to PTY ${terminalId}:`, error);
+      log.error(`Error writing to PTY ${terminalId.slice(-8)}:`, error);
       throw error;
     }
   }
@@ -728,12 +740,12 @@ const ptyHandler = new PTYHandler();
 
 // Cleanup on server shutdown
 process.on('SIGINT', () => {
-  console.log('[PTYHandler] Received SIGINT, cleaning up...');
+  log.warn('Received SIGINT, cleaning up...');
   ptyHandler.cleanupImmediate();
 });
 
 process.on('SIGTERM', () => {
-  console.log('[PTYHandler] Received SIGTERM, cleaning up...');
+  log.warn('Received SIGTERM, cleaning up...');
   ptyHandler.cleanupImmediate();
 });
 

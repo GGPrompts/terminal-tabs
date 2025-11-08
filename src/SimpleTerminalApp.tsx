@@ -4,6 +4,7 @@ import { Terminal } from './components/Terminal'
 import { SettingsModal } from './components/SettingsModal'
 import { Agent, TERMINAL_TYPES } from './types'
 import { useSimpleTerminalStore, Terminal as StoredTerminal } from './stores/simpleTerminalStore'
+import { useSettingsStore } from './stores/useSettingsStore'
 import SimpleSpawnService from './services/SimpleSpawnService'
 
 interface SpawnOption {
@@ -19,11 +20,28 @@ interface SpawnOption {
   defaultFontSize?: number
 }
 
+// Theme-to-gradient background mapping
+const THEME_BACKGROUNDS: Record<string, string> = {
+  default: 'linear-gradient(135deg, #1a1b26 0%, #24283b 100%)',
+  amber: 'linear-gradient(135deg, #2d1810 0%, #1a1308 100%)',
+  matrix: 'linear-gradient(135deg, #001a00 0%, #000d00 100%)',
+  dracula: 'linear-gradient(135deg, #282a36 0%, #1a1b26 100%)',
+  monokai: 'linear-gradient(135deg, #272822 0%, #1a1b1a 100%)',
+  'solarized-dark': 'linear-gradient(135deg, #002b36 0%, #073642 100%)',
+  'github-dark': 'linear-gradient(135deg, #0d1117 0%, #161b22 100%)',
+  cyberpunk: 'linear-gradient(135deg, #14001e 0%, #2d0033 100%)',
+  holographic: 'linear-gradient(135deg, #1a0033 0%, #330066 100%)',
+  vaporwave: 'linear-gradient(135deg, #1a0033 0%, #4d0066 100%)',
+}
+
 function SimpleTerminalApp() {
   const [webSocketAgents, setWebSocketAgents] = useState<Agent[]>([])
   const [connectionStatus, setConnectionStatus] = useState<'connected' | 'disconnected' | 'connecting'>('disconnected')
   const [showSpawnMenu, setShowSpawnMenu] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
+
+  // Settings
+  const { useTmux, updateSettings } = useSettingsStore()
   const [showCustomizePanel, setShowCustomizePanel] = useState(false)
   const [spawnOptions, setSpawnOptions] = useState<SpawnOption[]>([])
   const wsRef = useRef<WebSocket | null>(null)
@@ -91,7 +109,28 @@ function SimpleTerminalApp() {
     SimpleSpawnService.initialize(wsRef)
     connectWebSocket()
 
+    // Cleanup on page unload/refresh - close all terminals on backend
+    const handleBeforeUnload = () => {
+      if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+        // Send cleanup message for all terminals
+        storedTerminals.forEach(terminal => {
+          if (terminal.agentId) {
+            wsRef.current?.send(JSON.stringify({
+              type: 'close_terminal',
+              terminalId: terminal.agentId
+            }))
+          }
+        })
+      }
+      // Clear localStorage to prevent orphaned references
+      clearAllTerminals()
+    }
+
+    window.addEventListener('beforeunload', handleBeforeUnload)
+
     return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload)
+
       if (reconnectTimeoutRef.current) {
         clearTimeout(reconnectTimeoutRef.current)
         reconnectTimeoutRef.current = null
@@ -430,6 +469,8 @@ function SimpleTerminalApp() {
         theme: option.defaultTheme,
         transparency: option.defaultTransparency,
         size: { width: 800, height: 600 },
+        useTmux,  // Pass tmux setting from store
+        sessionName: `terminal-tabs-${newTerminal.id}`,  // Unique session name for persistence
       }
 
       // Convert command to commands array (like opustrator)
@@ -441,7 +482,7 @@ function SimpleTerminalApp() {
         config.startCommand = option.command  // For reconnection
       }
 
-      console.log('[SimpleTerminalApp] Spawning with config:', config)
+      console.log('[SimpleTerminalApp] Spawning with config (useTmux:', useTmux, '):', config)
 
       // Send spawn request (now we already have the placeholder in state)
       // We can await here safely because placeholder is already created
@@ -534,11 +575,32 @@ function SimpleTerminalApp() {
     updateTerminal(activeTerminal.id, { fontFamily })
   }
 
+  // Compute dynamic background based on active terminal theme
+  const appBackgroundStyle: React.CSSProperties = {
+    background: activeTerminal?.theme && THEME_BACKGROUNDS[activeTerminal.theme]
+      ? THEME_BACKGROUNDS[activeTerminal.theme]
+      : THEME_BACKGROUNDS.default,
+    transition: 'background 0.5s ease-in-out',
+  }
+
   return (
-    <div className="simple-terminal-app">
+    <div className="simple-terminal-app" style={appBackgroundStyle}>
       {/* Header */}
       <div className="app-header">
         <div className="app-title">Terminal Tabs</div>
+
+        {/* Tmux Toggle */}
+        <div className="tmux-toggle-container">
+          <span className="tmux-toggle-label">tmux</span>
+          <button
+            className={`tmux-toggle ${useTmux ? 'active' : ''}`}
+            onClick={() => updateSettings({ useTmux: !useTmux })}
+            title={useTmux ? "Using tmux (persistent sessions)" : "Using raw PTY (no persistence)"}
+          >
+            <span className="tmux-toggle-slider"></span>
+          </button>
+        </div>
+
         <div className="header-actions">
           <button
             className="settings-button"
@@ -627,22 +689,45 @@ function SimpleTerminalApp() {
               Spawn Terminal
             </button>
           </div>
-        ) : activeAgent ? (
-          <Terminal
-            ref={terminalRef}
-            agent={activeAgent}
-            onClose={() => handleCloseTerminal(activeTerminal!.id)}
-            onCommand={(cmd) => handleCommand(cmd, activeTerminal!.id)}
-            wsRef={wsRef}
-            embedded={true}
-            initialFontSize={activeTerminal.fontSize}
-            initialFontFamily={activeTerminal.fontFamily}
-          />
         ) : (
-          <div className="loading-state">
-            <div className="loading-spinner"></div>
-            <div className="loading-text">Connecting to terminal...</div>
-          </div>
+          <>
+            {/* Render ALL terminals, but hide inactive ones with CSS */}
+            {storedTerminals.map((terminal) => {
+              const agent = agents.find(a => a.id === terminal.agentId)
+              if (!agent) {
+                // Terminal not ready yet
+                return terminal.id === activeTerminalId ? (
+                  <div key={terminal.id} className="loading-state">
+                    <div className="loading-spinner"></div>
+                    <div className="loading-text">Connecting to terminal...</div>
+                  </div>
+                ) : null
+              }
+
+              return (
+                <div
+                  key={terminal.id}
+                  style={{ display: terminal.id === activeTerminalId ? 'block' : 'none' }}
+                  className="terminal-wrapper"
+                >
+                  <Terminal
+                    key={`term-${terminal.id}`}
+                    ref={terminal.id === activeTerminalId ? terminalRef : null}
+                    agent={agent}
+                    onClose={() => handleCloseTerminal(terminal.id)}
+                    onCommand={(cmd) => handleCommand(cmd, terminal.id)}
+                    wsRef={wsRef}
+                    embedded={true}
+                    initialTheme={terminal.theme}
+                    initialOpacity={terminal.transparency !== undefined ? terminal.transparency / 100 : 1}
+                    initialFontSize={terminal.fontSize}
+                    initialFontFamily={terminal.fontFamily}
+                    isSelected={terminal.id === activeTerminalId}
+                  />
+                </div>
+              )
+            })}
+          </>
         )}
       </div>
 
@@ -676,7 +761,7 @@ function SimpleTerminalApp() {
                 className="footer-control-btn"
                 onClick={() => handleFontSizeChange(1)}
                 title="Increase font size"
-                disabled={activeTerminal.fontSize && activeTerminal.fontSize >= 24}
+                disabled={!!activeTerminal.fontSize && activeTerminal.fontSize >= 24}
               >
                 +
               </button>
@@ -709,62 +794,76 @@ function SimpleTerminalApp() {
               ✕
             </button>
           </div>
-
-          {/* Expandable Customization Panel */}
-          {showCustomizePanel && (
-            <div className="footer-customize-panel">
-              <div className="customize-row">
-                <label>
-                  Theme
-                  <select
-                    value={activeTerminal.theme || 'default'}
-                    onChange={(e) => handleThemeChange(e.target.value)}
-                  >
-                    <option value="default">Default</option>
-                    <option value="amber">Amber</option>
-                    <option value="matrix">Matrix</option>
-                    <option value="dracula">Dracula</option>
-                    <option value="monokai">Monokai</option>
-                    <option value="solarized-dark">Solarized Dark</option>
-                    <option value="github-dark">GitHub Dark</option>
-                    <option value="cyberpunk">Cyberpunk</option>
-                    <option value="holographic">Holographic</option>
-                    <option value="vaporwave">Vaporwave</option>
-                  </select>
-                </label>
-
-                <label>
-                  Transparency: {activeTerminal.transparency || 100}%
-                  <input
-                    type="range"
-                    min="0"
-                    max="100"
-                    value={activeTerminal.transparency || 100}
-                    onChange={(e) => handleTransparencyChange(parseInt(e.target.value))}
-                  />
-                </label>
-              </div>
-
-              <div className="customize-row">
-                <label>
-                  Font Family
-                  <select
-                    value={activeTerminal.fontFamily || 'monospace'}
-                    onChange={(e) => handleFontFamilyChange(e.target.value)}
-                  >
-                    <option value="monospace">Monospace (Default)</option>
-                    <option value="'JetBrains Mono', monospace">JetBrains Mono</option>
-                    <option value="'Fira Code', monospace">Fira Code</option>
-                    <option value="'Source Code Pro', monospace">Source Code Pro</option>
-                    <option value="'Menlo', monospace">Menlo</option>
-                    <option value="'Consolas', monospace">Consolas</option>
-                    <option value="'Monaco', monospace">Monaco</option>
-                  </select>
-                </label>
-              </div>
-            </div>
-          )}
         </div>
+      )}
+
+      {/* Floating Customize Modal */}
+      {showCustomizePanel && activeTerminal && (
+        <>
+          <div
+            className="customize-modal-overlay"
+            onClick={() => setShowCustomizePanel(false)}
+          />
+          <div className="customize-modal">
+            <div className="customize-modal-header">
+              <h3>🎨 Customize Terminal</h3>
+              <button
+                className="customize-close-btn"
+                onClick={() => setShowCustomizePanel(false)}
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="customize-modal-body">
+              <label>
+                Theme
+                <select
+                  value={activeTerminal.theme || 'default'}
+                  onChange={(e) => handleThemeChange(e.target.value)}
+                >
+                  <option value="default">Default</option>
+                  <option value="amber">Amber</option>
+                  <option value="matrix">Matrix</option>
+                  <option value="dracula">Dracula</option>
+                  <option value="monokai">Monokai</option>
+                  <option value="solarized-dark">Solarized Dark</option>
+                  <option value="github-dark">GitHub Dark</option>
+                  <option value="cyberpunk">Cyberpunk</option>
+                  <option value="holographic">Holographic</option>
+                  <option value="vaporwave">Vaporwave</option>
+                </select>
+              </label>
+
+              <label>
+                Transparency: {activeTerminal.transparency || 100}%
+                <input
+                  type="range"
+                  min="0"
+                  max="100"
+                  value={activeTerminal.transparency || 100}
+                  onChange={(e) => handleTransparencyChange(parseInt(e.target.value))}
+                />
+              </label>
+
+              <label>
+                Font Family
+                <select
+                  value={activeTerminal.fontFamily || 'monospace'}
+                  onChange={(e) => handleFontFamilyChange(e.target.value)}
+                >
+                  <option value="monospace">Monospace (Default)</option>
+                  <option value="'JetBrains Mono', monospace">JetBrains Mono</option>
+                  <option value="'Fira Code', monospace">Fira Code</option>
+                  <option value="'Source Code Pro', monospace">Source Code Pro</option>
+                  <option value="'Menlo', monospace">Menlo</option>
+                  <option value="'Consolas', monospace">Consolas</option>
+                  <option value="'Monaco', monospace">Monaco</option>
+                </select>
+              </label>
+            </div>
+          </div>
+        </>
       )}
     </div>
   )

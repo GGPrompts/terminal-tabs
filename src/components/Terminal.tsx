@@ -859,6 +859,24 @@ export const Terminal = React.forwardRef<any, TerminalProps>(
       setTimeout(tryFit, 50);
     }, [mountKey, agent.id]);
 
+    // Handle tab switching - refresh terminal when it becomes visible
+    useEffect(() => {
+      if (isSelected && xtermRef.current && fitAddonRef.current) {
+        // Small delay to ensure display:block has taken effect
+        setTimeout(() => {
+          try {
+            // Refresh the terminal display
+            fitAddonRef.current?.fit();
+            xtermRef.current?.refresh(0, xtermRef.current.rows - 1);
+            // Restore focus
+            xtermRef.current?.focus();
+          } catch (error) {
+            console.warn('[Terminal] Failed to refresh on tab switch:', error);
+          }
+        }, 50);
+      }
+    }, [isSelected]);
+
     // Get theme for CSS styling
     const theme = getThemeForTerminalType(currentTheme);
     const themeClassName = getTerminalClassName(currentTheme);
@@ -889,24 +907,51 @@ export const Terminal = React.forwardRef<any, TerminalProps>(
               // Single refit after a longer delay to let WebGL settle
               setTimeout(() => {
                 if (fitAddonRef.current && xtermRef.current) {
-                  fitAddonRef.current.fit();
+                  // For TUI apps, do a "real" resize to force complete redraw
+                  if (isTUITool) {
+                    const currentCols = xtermRef.current.cols;
+                    const currentRows = xtermRef.current.rows;
 
-                  // Send dimensions to backend
-                  if (
-                    wsRef.current &&
-                    wsRef.current.readyState === WebSocket.OPEN
-                  ) {
-                    wsRef.current.send(
-                      JSON.stringify({
-                        type: "resize",
-                        terminalId: agent.id,
-                        cols: xtermRef.current.cols,
-                        rows: xtermRef.current.rows,
-                      }),
+                    // Resize xterm itself to trigger complete redraw
+                    xtermRef.current.resize(currentCols - 1, currentRows);
+
+                    // Send resize to PTY
+                    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+                      wsRef.current.send(
+                        JSON.stringify({
+                          type: "resize",
+                          terminalId: agent.id,
+                          cols: currentCols - 1,
+                          rows: currentRows,
+                        }),
+                      );
+                    }
+
+                    // Wait a moment, then resize back to correct size
+                    setTimeout(() => {
+                      if (xtermRef.current && wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+                        xtermRef.current.resize(currentCols, currentRows);
+                        wsRef.current.send(
+                          JSON.stringify({
+                            type: "resize",
+                            terminalId: agent.id,
+                            cols: currentCols,
+                            rows: currentRows,
+                          }),
+                        );
+                      }
+                    }, 100);
+                  } else {
+                    // For non-TUI, just fit and send resize with Ctrl+L
+                    fitAddonRef.current.fit();
+                    debouncedResize(
+                      agent.id,
+                      xtermRef.current.cols,
+                      xtermRef.current.rows,
                     );
                   }
                 }
-              }, 150);
+              }, 200);
             }
           }, 150);
         } else {
@@ -937,21 +982,48 @@ export const Terminal = React.forwardRef<any, TerminalProps>(
               // Strategy 5: Final refit after CSS animations settle
               setTimeout(() => {
                 if (xtermRef.current && fitAddonRef.current) {
-                  fitAddonRef.current.fit();
-                  xtermRef.current.refresh(0, xtermRef.current.rows - 1);
+                  // For TUI apps, do a "real" resize to force complete redraw
+                  if (isTUITool) {
+                    const currentCols = xtermRef.current.cols;
+                    const currentRows = xtermRef.current.rows;
 
-                  // Send dimensions to backend after final fit
-                  if (
-                    wsRef.current &&
-                    wsRef.current.readyState === WebSocket.OPEN
-                  ) {
-                    wsRef.current.send(
-                      JSON.stringify({
-                        type: "resize",
-                        terminalId: agent.id,
-                        cols: xtermRef.current.cols,
-                        rows: xtermRef.current.rows,
-                      }),
+                    // Resize xterm itself to trigger complete redraw
+                    xtermRef.current.resize(currentCols - 1, currentRows);
+
+                    // Send resize to PTY
+                    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+                      wsRef.current.send(
+                        JSON.stringify({
+                          type: "resize",
+                          terminalId: agent.id,
+                          cols: currentCols - 1,
+                          rows: currentRows,
+                        }),
+                      );
+                    }
+
+                    // Wait a moment, then resize back to correct size
+                    setTimeout(() => {
+                      if (xtermRef.current && wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+                        xtermRef.current.resize(currentCols, currentRows);
+                        wsRef.current.send(
+                          JSON.stringify({
+                            type: "resize",
+                            terminalId: agent.id,
+                            cols: currentCols,
+                            rows: currentRows,
+                          }),
+                        );
+                      }
+                    }, 100);
+                  } else {
+                    // For non-TUI, fit and use debounced resize with Ctrl+L (fixes stuck terminals)
+                    fitAddonRef.current.fit();
+                    xtermRef.current.refresh(0, xtermRef.current.rows - 1);
+                    debouncedResize(
+                      agent.id,
+                      xtermRef.current.cols,
+                      xtermRef.current.rows,
                     );
                   }
                 }
@@ -1050,15 +1122,46 @@ export const Terminal = React.forwardRef<any, TerminalProps>(
             // Refresh the display
             xtermRef.current.refresh(0, xtermRef.current.rows - 1);
 
-            // Send new dimensions to backend
-            if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-              wsRef.current.send(
-                JSON.stringify({
-                  type: "resize",
-                  terminalId: agent.id,
-                  cols: xtermRef.current.cols,
-                  rows: xtermRef.current.rows,
-                }),
+            // For TUI apps, do a "real" xterm resize to force complete redraw
+            if (isTUITool) {
+              const currentCols = xtermRef.current.cols;
+              const currentRows = xtermRef.current.rows;
+
+              // Resize xterm itself to trigger complete redraw
+              xtermRef.current.resize(currentCols - 1, currentRows);
+
+              // Send resize to PTY
+              if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+                wsRef.current.send(
+                  JSON.stringify({
+                    type: "resize",
+                    terminalId: agent.id,
+                    cols: currentCols - 1,
+                    rows: currentRows,
+                  }),
+                );
+              }
+
+              // Wait a moment, then resize back to correct size
+              setTimeout(() => {
+                if (xtermRef.current && wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+                  xtermRef.current.resize(currentCols, currentRows);
+                  wsRef.current.send(
+                    JSON.stringify({
+                      type: "resize",
+                      terminalId: agent.id,
+                      cols: currentCols,
+                      rows: currentRows,
+                    }),
+                  );
+                }
+              }, 100);
+            } else {
+              // For non-TUI, use debounced resize with Ctrl+L to fix stuck terminals
+              debouncedResize(
+                agent.id,
+                xtermRef.current.cols,
+                xtermRef.current.rows,
               );
             }
           } catch (err) {

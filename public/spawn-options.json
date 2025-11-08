@@ -121,10 +121,11 @@
     },
     {
       "label": "Dev Logs",
-      "command": "lnav logs/backend.log logs/frontend.log",
+      "command": "./scripts/dev-logs.sh",
       "terminalType": "bash",
-      "icon": "🔍",
-      "description": "Terminal Tabs development logs (backend + frontend)",
+      "workingDir": "~/projects/terminal-tabs",
+      "icon": "📊",
+      "description": "View beautiful colored logs from backend server",
       "defaultTheme": "monokai",
       "defaultTransparency": 95
     },

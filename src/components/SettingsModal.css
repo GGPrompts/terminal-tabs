@@ -248,6 +248,16 @@
   font-family: inherit;
 }
 
+.option-form label select {
+  color-scheme: dark;
+}
+
+.option-form label select option {
+  background: #1a1a1a;
+  color: #ffffff;
+  padding: 6px 10px;
+}
+
 .option-form label input:focus,
 .option-form label select:focus {
   outline: none;
