@@ -392,10 +392,11 @@ export const Terminal = React.forwardRef<any, TerminalProps>(
           // Call fit() which will calculate cols/rows from container dimensions
           fitAddon.fit();
 
-          console.log(`[Terminal] Initial fit attempt ${retryCount + 1}: ${xterm.cols}x${xterm.rows}`);
+          console.log(`[Terminal] Initial fit attempt ${retryCount + 1}: ${xterm.cols}x${xterm.rows} for ${agent.name}`);
 
           // Send initial dimensions to backend
           if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+            console.log(`[Terminal] Sending resize to backend: ${xterm.cols}x${xterm.rows} for ${agent.name}`);
             wsRef.current.send(
               JSON.stringify({
                 type: "resize",
@@ -404,6 +405,8 @@ export const Terminal = React.forwardRef<any, TerminalProps>(
                 rows: xterm.rows,
               }),
             );
+          } else {
+            console.warn(`[Terminal] Cannot send resize - WebSocket not open for ${agent.name}`);
           }
 
           // If cols/rows are still at defaults (80x30 or close), retry
