@@ -150,6 +150,109 @@ Terminals are assigned to specific windows via the `windowId` property. Each win
 - **Backend coordination**: Single WebSocket connection per window, backend routes messages correctly
 - **Persistence**: Window assignments survive refresh/restart
 
+### Critical Architecture (Popout Flow)
+
+**⚠️ IMPORTANT**: Multi-window support requires strict window isolation to prevent cross-contamination. Follow these principles:
+
+#### 1. **Backend Output Routing** (backend/server.js:114-443)
+```javascript
+// CRITICAL: terminalOwners map tracks WebSocket ownership
+const terminalOwners = new Map(); // terminalId -> Set<WebSocket>
+
+// On spawn/reconnect: register ownership
+terminalOwners.get(terminalId).add(ws)
+
+// On output: send ONLY to owners (no broadcast!)
+terminalRegistry.on('output', (terminalId, data) => {
+  const owners = terminalOwners.get(terminalId)
+  owners.forEach(client => client.send(message))
+})
+```
+**Why**: Broadcasting terminal output to all clients causes escape sequence corruption (DSR) in wrong windows.
+
+#### 2. **Frontend Window Filtering** (src/SimpleTerminalApp.tsx:757-785)
+```typescript
+// CRITICAL: Check windowId BEFORE adding to webSocketAgents
+if (existingTerminal) {
+  const terminalWindow = existingTerminal.windowId || 'main'
+  if (terminalWindow !== currentWindowId) {
+    return  // Ignore terminals from other windows
+  }
+  // Now safe to add to webSocketAgents
+}
+```
+**Why**: Without this check, Window 1 can adopt terminals spawned in Window 2, creating duplicate connections to the same tmux session.
+
+#### 3. **No Fallback Terminal Creation** (src/SimpleTerminalApp.tsx:812-819)
+```typescript
+} else {
+  // Do NOT create new terminal for unmatched spawns
+  console.warn('⏭️ Ignoring terminal-spawned - no matching terminal')
+  return  // Prevents cross-window adoption
+}
+```
+**Why**: The old fallback created terminals for broadcasts from other windows, bypassing windowId filtering.
+
+#### 4. **Tmux Detach API** (backend/routes/api.js:696-733)
+```javascript
+// POST /api/tmux/detach/:name
+execSync(`tmux detach-client -s "${sessionName}"`)
+```
+**Flow**: Original window → detach via API → clear agentId → new window → reconnect
+**Why**: Clean handoff prevents both windows from having active agents to same session.
+
+#### 5. **URL Parameter Activation** (src/SimpleTerminalApp.tsx:362-395)
+```typescript
+// Watch FULL storedTerminals array (not just length!)
+useEffect(() => {
+  const activeFromUrl = urlParams.get('active')
+  if (terminal && terminal.windowId === currentWindowId) {
+    setActiveTerminal(activeFromUrl)
+  }
+}, [storedTerminals, currentWindowId])  // Critical dependencies
+```
+**Why**: Watching only `storedTerminals.length` misses windowId updates from localStorage sync.
+
+#### 6. **xterm.open Retry Logic** (src/components/Terminal.tsx:269-288)
+```typescript
+// Bounded retry for 0x0 containers
+let retryCount = 0
+const attemptOpen = () => {
+  if (has_dimensions) xterm.open()
+  else if (retryCount < 10) setTimeout(attemptOpen, 50)
+}
+```
+**Why**: Popout windows may have 0x0 dimensions initially; xterm needs to retry instead of giving up.
+
+### Common Pitfalls to Avoid
+
+❌ **DON'T** broadcast terminal output to all WebSocket clients
+✅ **DO** route output only to terminal owners via `terminalOwners` map
+
+❌ **DON'T** create terminals for unmatched `terminal-spawned` events
+✅ **DO** return early if no matching terminal in current window
+
+❌ **DON'T** watch `storedTerminals.length` for URL activation
+✅ **DO** watch full `storedTerminals` array to catch windowId changes
+
+❌ **DON'T** set `activeTerminalId` in `addTerminal` unconditionally
+✅ **DO** only set if `!state.activeTerminalId` to prevent cross-window interference
+
+❌ **DON'T** skip windowId filtering in terminal-spawned handler
+✅ **DO** check windowId BEFORE adding to webSocketAgents
+
+### Debugging Multi-Window Issues
+
+If you see escape sequences (`1;2c0;276;0c`) in terminals:
+- Check backend output routing - should use `terminalOwners`, not `broadcast()`
+- Check frontend windowId filtering - verify early return for wrong window
+- Check for duplicate terminals - both windows might have same `agent.id`
+
+If popout windows show blank terminals:
+- Check `?active=` parameter handling - should watch full `storedTerminals`
+- Check xterm.open retry logic - should retry up to 10 times for 0x0 containers
+- Check tmux detach API - original window should clear `agentId` before popout
+
 ### Example Workflow
 
 ```bash
