@@ -146,6 +146,14 @@ class PTYHandler extends EventEmitter {
           sessionName = requestedSession;
           log.success(`🔄 Reconnecting to tmux session: ${sessionName}`);
 
+          // Apply remain-on-exit setting to existing sessions (fixes old sessions)
+          try {
+            execSync(`tmux set-option -t "${sessionName}" remain-on-exit off`);
+            log.debug(`Applied remain-on-exit off to existing session ${sessionName}`);
+          } catch (err) {
+            log.warn(`Failed to set remain-on-exit for ${sessionName}:`, err.message);
+          }
+
           // CRITICAL FIX: Clean up any old PTY for this session (even if disconnect is in progress)
           log.debug(`Searching for old PTYs with session: ${sessionName}`);
           for (const [existingId, existingPty] of this.processes.entries()) {
@@ -180,6 +188,11 @@ class PTYHandler extends EventEmitter {
             execSync(tmuxCmd, {
               env: enhancedEnv
             });
+
+            // CRITICAL: Ensure remain-on-exit is off for this session
+            // This allows tabs to auto-close when you type 'exit' or Ctrl+D
+            execSync(`tmux set-option -t "${sessionName}" remain-on-exit off`);
+
             log.success(`Tmux session created: ${sessionName}`);
           } catch (tmuxError) {
             log.error('Failed to create tmux session:', tmuxError);
