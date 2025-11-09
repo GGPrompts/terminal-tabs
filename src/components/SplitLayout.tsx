@@ -261,7 +261,6 @@ export const SplitLayout: React.FC<SplitLayoutProps> = ({
               initialFontSize={leftTerminal.fontSize}
               initialFontFamily={leftTerminal.fontFamily}
               isSelected={leftTerminal.id === activeTerminalId}
-              isFocused={leftTerminal.id === focusedTerminalId}
             />
           </div>
         </ResizableBox>
@@ -307,7 +306,6 @@ export const SplitLayout: React.FC<SplitLayoutProps> = ({
             initialFontSize={rightTerminal.fontSize}
             initialFontFamily={rightTerminal.fontFamily}
             isSelected={rightTerminal.id === activeTerminalId}
-            isFocused={rightTerminal.id === focusedTerminalId}
           />
         </div>
       </div>
@@ -440,7 +438,6 @@ export const SplitLayout: React.FC<SplitLayoutProps> = ({
               initialFontSize={topTerminal.fontSize}
               initialFontFamily={topTerminal.fontFamily}
               isSelected={topTerminal.id === activeTerminalId}
-              isFocused={topTerminal.id === focusedTerminalId}
             />
           </div>
         </ResizableBox>
@@ -486,7 +483,6 @@ export const SplitLayout: React.FC<SplitLayoutProps> = ({
             initialFontSize={bottomTerminal.fontSize}
             initialFontFamily={bottomTerminal.fontFamily}
             isSelected={bottomTerminal.id === activeTerminalId}
-            isFocused={bottomTerminal.id === focusedTerminalId}
           />
         </div>
       </div>

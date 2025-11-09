@@ -75,9 +75,13 @@ export function useTerminalResize(
 
   /**
    * Set up ResizeObserver for container size changes (drag/resize)
+   * CRITICAL: Must re-run when xtermRef becomes available (terminal initialization)
    */
   useEffect(() => {
-    if (!terminalRef.current?.parentElement) return;
+    // Wait for both terminal ref and xterm instance to be available
+    if (!terminalRef.current?.parentElement || !xtermRef.current || !fitAddonRef.current) {
+      return;
+    }
 
     roRef.current = new ResizeObserver((entries) => {
       if (fitAddonRef.current && xtermRef.current) {
@@ -109,7 +113,7 @@ export function useTerminalResize(
       } catch {}
       roRef.current = null;
     };
-  }, [agentId, debouncedResize]); // Don't include refs to avoid unnecessary re-runs
+  }, [agentId, debouncedResize, xtermRef.current, fitAddonRef.current]); // Re-run when terminal initializes
 
   /**
    * Re-attach ResizeObserver when portal host changes (dock <-> canvas)

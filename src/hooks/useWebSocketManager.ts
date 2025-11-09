@@ -38,11 +38,12 @@ interface SpawnOption {
  * @param spawnOptionsRef - Ref to spawn options (avoids closure issues)
  * @param useTmux - Whether tmux is enabled
  * @param pendingSpawns - Map of pending spawn requests by requestId
+ * @param wsRef - CRITICAL: WebSocket ref that must be shared with Terminal components
  * @param updateTerminal - Function to update terminal properties
  * @param removeTerminal - Function to remove a terminal
  * @param setActiveTerminal - Function to set active terminal
  * @param handleReconnectTerminal - Function to reconnect to existing terminal session
- * @returns Object with wsRef, webSocketAgents, connectionStatus, and setter
+ * @returns Object with webSocketAgents, connectionStatus, and setter
  */
 export function useWebSocketManager(
   currentWindowId: string,
@@ -52,6 +53,7 @@ export function useWebSocketManager(
   spawnOptionsRef: React.MutableRefObject<SpawnOption[]>,
   useTmux: boolean,
   pendingSpawns: React.MutableRefObject<Map<string, StoredTerminal>>,
+  wsRef: React.MutableRefObject<WebSocket | null>, // CRITICAL: Use parent's wsRef!
   updateTerminal: (id: string, updates: Partial<StoredTerminal>) => void,
   removeTerminal: (id: string) => void,
   setActiveTerminal: (id: string | null) => void,
@@ -59,7 +61,6 @@ export function useWebSocketManager(
 ) {
   const [webSocketAgents, setWebSocketAgents] = useState<Agent[]>([])
   const [connectionStatus, setConnectionStatus] = useState<'connected' | 'disconnected' | 'connecting'>('disconnected')
-  const wsRef = useRef<WebSocket | null>(null)
   const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [reconnectAttempts, setReconnectAttempts] = useState(0)
   const processedAgentIds = useRef<Set<string>>(new Set())
@@ -423,7 +424,6 @@ export function useWebSocketManager(
   }, [])
 
   return {
-    wsRef,
     webSocketAgents,
     connectionStatus,
     setWebSocketAgents

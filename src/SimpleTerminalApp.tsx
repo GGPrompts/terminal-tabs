@@ -387,6 +387,7 @@ function SimpleTerminalApp() {
 
   // WebSocket connection management (extracted to custom hook)
   // Must be called after useTerminalSpawning to use handleReconnectTerminal
+  // CRITICAL: Pass wsRef so Terminal components can send input via same WebSocket!
   const { webSocketAgents, connectionStatus, setWebSocketAgents } = useWebSocketManager(
     currentWindowId,
     storedTerminals,
@@ -395,6 +396,7 @@ function SimpleTerminalApp() {
     spawnOptionsRef,
     useTmux,
     pendingSpawns,
+    wsRef, // CRITICAL: Share wsRef with hook so terminals can send input!
     updateTerminal,
     removeTerminal,
     setActiveTerminal,
