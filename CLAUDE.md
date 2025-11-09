@@ -357,7 +357,7 @@ tmux capture-pane -t tabz:backend -p -S -50 | grep "\[Browser"
 
 ## 🔗 Links
 
-- **GitHub**: https://github.com/GGPrompts/tabz
+- **GitHub**: https://github.com/GGPrompts/Tabz
 - **Parent Project**: https://github.com/GGPrompts/opustrator
 - **xterm.js Docs**: https://xtermjs.org/
 
