@@ -20,7 +20,7 @@
       "defaultTransparency": 95,
       "defaultFontSize": 16,
       "defaultFontFamily": "'Fira Code', monospace",
-      "defaultBackground": "matrix-depths"
+      "defaultBackground": "dark-neutral"
     },
     {
       "label": "Claude (skip permissions)",

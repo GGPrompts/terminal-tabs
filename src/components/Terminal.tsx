@@ -22,7 +22,6 @@ import { getBackgroundCSS } from "../styles/terminal-backgrounds";
 import { ThemeDropdown } from "./ThemeDropdown";
 import { debounce } from "../utils/debounce";
 import { useSettingsStore } from "../stores/useSettingsStore";
-import { useTerminalMouse } from "../hooks/useTerminalMouse";
 import { useTerminalTheme } from "../hooks/useTerminalTheme";
 import { useTerminalResize } from "../hooks/useTerminalResize";
 import { useTerminalFont } from "../hooks/useTerminalFont";
@@ -38,11 +37,10 @@ interface TerminalProps {
   initialOpacity?: number; // Initial opacity (0-1)
   initialFontSize?: number; // Initial font size
   initialFontFamily?: string; // Initial font family
-  canvasZoom?: number; // Canvas zoom level for mouse coordinate correction
   // A key that changes when the portal host changes (e.g., 'dock' vs 'canvas')
   mountKey?: string;
   onTitleChange?: (title: string) => void; // Callback when xterm title changes
-  isSelected?: boolean; // Whether this terminal is currently selected (for canvas zoom interaction)
+  isSelected?: boolean; // Whether this terminal is currently active (for tab switching refresh)
 }
 
 export const Terminal = React.forwardRef<any, TerminalProps>(
@@ -58,7 +56,6 @@ export const Terminal = React.forwardRef<any, TerminalProps>(
       initialOpacity = 0.2,
       initialFontSize,
       initialFontFamily,
-      canvasZoom = 1,
       mountKey,
       onTitleChange,
       isSelected = false,
@@ -141,8 +138,7 @@ export const Terminal = React.forwardRef<any, TerminalProps>(
       [isTUITool],
     );
 
-    // Use custom hooks for mouse, theme, resize, and font management
-    useTerminalMouse(terminalRef, isSelected);
+    // Use custom hooks for theme, resize, and font management
     const applyTheme = useTerminalTheme(
       xtermRef,
       fitAddonRef,
@@ -485,23 +481,6 @@ export const Terminal = React.forwardRef<any, TerminalProps>(
       };
     }, [agent.id, currentTheme]);
 
-    /**
-     * ✅ SOLVED: Terminal mouse accuracy at non-100% zoom
-     *
-     * Solution: Event interception with visual-to-layout ratio transformation
-     * - Intercepts mouse events in capture phase (before xterm sees them)
-     * - Calculates ratio: rect.width / offsetWidth (accounts for both browser & canvas zoom)
-     * - Transforms visual coordinates to layout coordinates
-     * - Dispatches corrected events to .xterm-viewport element
-     *
-     * Implementation: Lines ~333-428 (mouseTransformHandler)
-     * Documentation: docs/MOUSE_COORDINATE_FIX.md
-     * Status: Tested at 25%-300% zoom, works with browser zoom + canvas zoom
-     */
-
-    // Canvas zoom is handled by parent transform - no font size adjustment needed
-    // Font size stays constant, visual zoom comes from canvas scale()
-
     // Handle WebSocket messages for this terminal
     useEffect(() => {
       const handleTerminalOutput = (event: CustomEvent) => {
@@ -719,20 +698,6 @@ export const Terminal = React.forwardRef<any, TerminalProps>(
               <span className="terminal-icon">{terminalInfo?.icon}</span>
               <span className="terminal-name">{agent.name}</span>
               <span className="terminal-type">({agent.terminalType})</span>
-              {canvasZoom && Math.abs(canvasZoom - 1) > 0.01 && (
-                <span
-                  className="terminal-zoom-warning"
-                  title="Terminal mouse clicks work best at 100% zoom. Press Ctrl+0 to reset zoom."
-                  style={{
-                    color: '#fbbf24',
-                    marginLeft: '8px',
-                    fontSize: '0.9em',
-                    opacity: 0.8
-                  }}
-                >
-                  ⚠️ {Math.round(canvasZoom * 100)}%
-                </span>
-              )}
             </div>
             <div className="terminal-actions">
               <div className="theme-picker-container">
