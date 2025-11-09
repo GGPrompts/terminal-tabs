@@ -199,6 +199,12 @@ export const SplitLayout: React.FC<SplitLayoutProps> = ({
       );
     }
 
+    // Wait for container to have valid dimensions before rendering split
+    // (prevents xterm from initializing with width/height 0)
+    if (containerWidth === 0 || containerHeight === 0) {
+      return <div ref={containerRef} style={{ width: '100%', height: '100%' }}></div>;
+    }
+
     const leftWidth = (leftPane.size / 100) * containerWidth;
 
     return (
@@ -370,6 +376,12 @@ export const SplitLayout: React.FC<SplitLayoutProps> = ({
           </div>
         </div>
       );
+    }
+
+    // Wait for container to have valid dimensions before rendering split
+    // (prevents xterm from initializing with height 0)
+    if (containerHeight === 0) {
+      return <div ref={containerRef} style={{ width: '100%', height: '100%' }}></div>;
     }
 
     const topHeight = (topPane.size / 100) * containerHeight;

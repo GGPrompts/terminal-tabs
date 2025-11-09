@@ -1,93 +1,89 @@
-# Next Session: Enhance Spawn Options Manager UX
+# Next Session Notes
 
-## Goal
-Improve the spawn options manager UI to make font and background selections more visual and user-friendly.
+## Multi-Window Tab Management - COMPLETE ✅
 
-## Current State
-The spawn options manager (⚙️ Settings button) allows editing `spawn-options.json` entries. Currently:
-- Font family dropdown shows plain text names (e.g., "Fira Code", "JetBrains Mono")
-- Background gradient dropdown shows plain text names (e.g., "dark-neutral", "amber-warmth", "matrix-code")
+**Implemented**: November 9, 2025
 
-## Desired Changes
+The multi-window tab management feature allows you to organize terminals across multiple browser windows/tabs, perfect for multi-monitor setups.
 
-### 1. Font Family Dropdown - Show Fonts in Their Own Style
-**File**: `src/components/SettingsModal.tsx` (lines ~150-180 for font family dropdown)
+### How It Works
 
-**Current**:
+Each browser window has a unique ID stored in the URL (`?window=<id>`):
+- **Main window**: `window=main` (or no parameter)
+- **Additional windows**: `window=window-1762685xxx-abc123`
+
+Each terminal has a `windowId` property that determines which window it appears in. The ↗ button moves terminals between windows.
+
+### Features
+
+1. **Full UI in all windows** - Every window shows header, tabs, spawn menu, etc.
+2. **Move tabs between windows** - Click ↗ to move a tab to a new window
+3. **Multi-monitor support** - Perfect for 2+ monitor setups
+4. **Shared state** - All windows share same localStorage via Zustand
+5. **Independent reconnection** - Each window only reconnects to its own terminals
+6. **Split terminal support** - Moving a split tab moves all its panes too
+
+### Implementation Details
+
+**Files Modified**:
+- `src/stores/simpleTerminalStore.ts` - Replaced `poppedOut` with `windowId`
+- `src/SimpleTerminalApp.tsx` - Window ID generation, filtering, pop-out logic
+
+**Key Changes**:
 ```tsx
-<option value="Fira Code">Fira Code</option>
-```
+// Window ID generation (on app load)
+const currentWindowId = useState(() => {
+  const urlParams = new URLSearchParams(window.location.search)
+  return urlParams.get('window') || 'main'
+})
 
-**Desired**:
-- Each option should display in its actual font
-- Use inline styles or CSS to apply the font to each option
-- Example: The "Fira Code" option should render in Fira Code font
+// Terminal filtering
+const visibleTerminals = storedTerminals.filter(t => {
+  if (t.isHidden) return false
+  const terminalWindow = t.windowId || 'main'
+  return terminalWindow === currentWindowId
+})
 
-### 2. Background Gradient Dropdown - Show Visual Previews
-**File**: `src/components/SettingsModal.tsx` (background dropdown)
-
-**Current**:
-```tsx
-<option value="dark-neutral">dark-neutral</option>
-<option value="amber-warmth">amber-warmth</option>
-```
-
-**Desired**:
-- Show actual gradient preview next to/instead of text name
-- Options:
-  - Use colored background on the option element
-  - Add a small gradient swatch/box before the text
-  - Consider custom dropdown with gradient previews
-
-**Background Gradient Mapping** (from `src/SimpleTerminalApp.tsx` around line 65):
-```typescript
-const BACKGROUND_GRADIENTS = {
-  'dark-neutral': 'linear-gradient(135deg, #1a1b26 0%, #16161e 100%)',
-  'amber-warmth': 'linear-gradient(135deg, #1a1b26 0%, #2a1810 50%, #1a1b26 100%)',
-  'matrix-code': 'linear-gradient(135deg, #0a120a 0%, #001a00 50%, #0a120a 100%)',
-  'cyberpunk-neon': 'linear-gradient(135deg, #1a0a2e 0%, #16213e 50%, #1a0a2e 100%)',
-  'vaporwave-dreams': 'linear-gradient(135deg, #1a0a2e 0%, #2a1a3e 50%, #1a0a2e 100%)',
-  'holographic': 'linear-gradient(135deg, #0f1419 0%, #1a2332 50%, #0f1419 100%)',
-  'deep-ocean': 'linear-gradient(135deg, #0a1628 0%, #001f3f 50%, #0a1628 100%)',
-  // ... etc
+// Moving terminals between windows
+handlePopOutTab(terminalId) {
+  const newWindowId = `window-${Date.now()}-${random()}`
+  updateTerminal(terminalId, { windowId: newWindowId })
+  window.open(`?window=${newWindowId}`, `tabz-${newWindowId}`)
 }
+
+// New terminals auto-assigned to current window
+newTerminal.windowId = currentWindowId
 ```
 
-## Implementation Approach
+### Usage
 
-### Option A: Style Native Dropdowns
-- Simple: Add inline styles to `<option>` elements
-- Pro: No UI library needed
-- Con: Limited browser support for option styling
+1. **Create new window**: Click ↗ on any tab → opens new window with that tab
+2. **Multi-monitor setup**: Drag browser windows to different monitors
+3. **Organize tabs**: Use ↗ to move tabs between windows as needed
+4. **All windows persist**: Close/refresh any window, tabs restore to correct window
 
-### Option B: Custom Dropdown Component
-- Create a custom styled dropdown with better visual previews
-- Pro: Full control, can show gradient swatches
-- Con: More work, need to handle accessibility
+### Technical Notes
 
-### Option C: React Select or Similar
-- Use a library for custom dropdowns
-- Pro: Professional, accessible, customizable
-- Con: New dependency
+- Terminals without `windowId` default to 'main' (backwards compatibility)
+- Each window only reconnects to terminals with matching `windowId`
+- Closing a window doesn't delete terminals - they stay in that window's ID
+- Reopening a window with the same URL parameter restores its tabs
 
-## Files to Modify
-- `src/components/SettingsModal.tsx` - Main settings modal with dropdowns
-- `src/components/SettingsModal.css` - Styling for the modal
-- Possibly create new component: `src/components/FontDropdown.tsx` and `BackgroundDropdown.tsx`
+### Future Enhancements (Optional)
 
-## Reference Locations
-- Current font family list: `SettingsModal.tsx` around line 150-180
-- Background gradients: `SimpleTerminalApp.tsx` line ~65 (`BACKGROUND_GRADIENTS`)
-- Theme backgrounds mapping: `SimpleTerminalApp.tsx` line ~50 (`THEME_BACKGROUNDS`)
+- "Move to window" dropdown to select specific existing window
+- "Merge windows" button to bring all terminals into one window
+- Visual indicator showing which window a terminal belongs to
+- BroadcastChannel API for cross-window state sync
 
-## Success Criteria
-1. Font dropdown shows each font name in its actual typeface
-2. Background dropdown shows visual gradient preview for each option
-3. Selections remain functional (saving to spawn-options.json works)
-4. UI is more intuitive - users can see what they're selecting
+---
 
-## Tips
-- The SettingsModal already has access to spawn options and handles editing
-- Font families used: "Fira Code", "JetBrains Mono", "Monaco", "Consolas", "Courier New", "monospace"
-- Background gradients are defined in `BACKGROUND_GRADIENTS` constant
-- Consider showing a live preview of the selected font/background combination
+## Known Issues
+
+- **Header overlap in pop-out windows** - Terminals start underneath header (can be fixed with CSS)
+
+---
+
+## Other Notes
+
+The old `poppedOut` flag and `isSingleTerminalView` approach has been completely replaced with the multi-window system.

@@ -1072,7 +1072,7 @@
   margin-right: 4px;
 }
 
-.terminal-tab:hover .popout-tab-btn {
+.tab:hover .popout-tab-btn {
   opacity: 1;
 }
 

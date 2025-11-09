@@ -31,6 +31,7 @@ export interface Terminal {
   status?: 'spawning' | 'active' | 'closed' | 'error';
   requestId?: string; // For matching placeholder with WebSocket response
   isHidden?: boolean; // Hide from tab bar (e.g., when part of a split)
+  windowId?: string; // Which browser window/tab this terminal belongs to (for multi-window support)
 
   // Split layout data (Phase 1 of split layout system)
   splitLayout?: SplitLayout;

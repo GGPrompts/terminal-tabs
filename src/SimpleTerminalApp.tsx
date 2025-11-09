@@ -33,6 +33,13 @@ import {
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 
+// Extend Window interface for handlePopOutTab
+declare global {
+  interface Window {
+    handlePopOutTab?: (terminalId: string) => void
+  }
+}
+
 interface SpawnOption {
   label: string
   command: string
@@ -163,6 +170,17 @@ function SortableTab({ terminal, isActive, onActivate, onClose, dropZone, isDrag
       {renderTabIcon()}
       <span className="tab-label">{terminal.name}</span>
       <button
+        className="popout-tab-btn"
+        onClick={(e) => {
+          e.stopPropagation()
+          window.handlePopOutTab?.(terminal.id)
+        }}
+        onPointerDown={(e) => e.stopPropagation()}
+        title="Pop out to new browser tab"
+      >
+        ↗
+      </button>
+      <button
         className="tab-close"
         onClick={onClose}
         onPointerDown={(e) => e.stopPropagation()}
@@ -237,6 +255,29 @@ function SimpleTerminalApp() {
   const processedAgentIds = useRef<Set<string>>(new Set())
   const pendingSpawns = useRef<Map<string, StoredTerminal>>(new Map()) // Track pending spawns by requestId
 
+  // Multi-window support: each browser window/tab has a unique ID
+  const [currentWindowId] = useState(() => {
+    const urlParams = new URLSearchParams(window.location.search)
+    const windowIdFromUrl = urlParams.get('window')
+
+    if (windowIdFromUrl) {
+      return windowIdFromUrl
+    }
+
+    // Main window uses 'main' as ID, new windows get unique IDs
+    const isMainWindow = !urlParams.has('window')
+    const newWindowId = isMainWindow ? 'main' : `window-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+
+    // Update URL with window ID (without page reload)
+    if (!isMainWindow) {
+      const newUrl = new URL(window.location.href)
+      newUrl.searchParams.set('window', newWindowId)
+      window.history.replaceState({}, '', newUrl)
+    }
+
+    return newWindowId
+  })
+
   const {
     terminals: storedTerminals,
     activeTerminalId,
@@ -266,10 +307,22 @@ function SimpleTerminalApp() {
   // We handle reordering manually in handleDragEnd
   const customCollisionDetection = pointerWithin
 
-  // Filter out hidden terminals (those that are part of splits)
+  // Filter terminals by current window ID
+  // Each window only shows terminals that belong to it (or have no windowId yet = default to main window)
   const visibleTerminals = useMemo(() => {
-    return storedTerminals.filter(t => !t.isHidden)
-  }, [storedTerminals])
+    const filtered = storedTerminals.filter(t => {
+      // Hidden terminals (split panes) are never visible in tab bar
+      if (t.isHidden) return false
+
+      // Terminals without a windowId belong to the main window (backwards compatibility)
+      const terminalWindow = t.windowId || 'main'
+
+      // Show only terminals that belong to this window
+      return terminalWindow === currentWindowId
+    })
+
+    return filtered
+  }, [storedTerminals, currentWindowId])
 
   // Merge WebSocket agents with stored terminals
   const agents = useMemo(() => {
@@ -699,15 +752,16 @@ function SimpleTerminalApp() {
               console.log('[SimpleTerminalApp] Cleared from pendingSpawns ref')
             }
 
-            // Update existing terminal with agent info - PRESERVE splitLayout and isHidden
+            // Update existing terminal with agent info - PRESERVE splitLayout, isHidden, and windowId
             updateTerminal(existingTerminal.id, {
               agentId: message.data.id,
               sessionName: message.data.sessionName,
               status: 'active',
               requestId: undefined, // Clear requestId after matching
-              // Explicitly preserve split-related properties
+              // Explicitly preserve critical properties
               splitLayout: existingTerminal.splitLayout,
               isHidden: existingTerminal.isHidden,
+              windowId: existingTerminal.windowId, // CRITICAL: Preserve window assignment
             })
           } else {
             // This should rarely happen now that we match by requestId
@@ -816,6 +870,14 @@ function SimpleTerminalApp() {
                 console.log(`[SimpleTerminalApp] ⏭️ Skipping duplicate reconnection for session: ${terminal.sessionName}`)
                 return
               }
+
+              // Skip reconnecting to terminals that belong to other windows
+              const terminalWindow = terminal.windowId || 'main'
+              if (terminalWindow !== currentWindowId) {
+                console.log(`[SimpleTerminalApp] ⏭️ Skipping reconnection for terminal in different window: ${terminal.sessionName}`)
+                return
+              }
+
               reconnectingSessionsSet.add(terminal.sessionName)
               // Session exists! Reconnect by respawning (backend will auto-attach)
               console.log(`[SimpleTerminalApp] 🔄 Reconnecting to session: ${terminal.sessionName}`)
@@ -909,6 +971,7 @@ function SimpleTerminalApp() {
         createdAt: Date.now(),
         status: 'spawning',
         requestId, // Store requestId for matching with WebSocket response
+        windowId: currentWindowId, // Assign to current window
       }
 
       // Store in ref FIRST (synchronous, no race condition)
@@ -988,7 +1051,7 @@ function SimpleTerminalApp() {
         // isHidden is preserved via spread operator
       }
 
-      // Update terminal state - EXPLICITLY preserve splitLayout and isHidden
+      // Update terminal state - EXPLICITLY preserve splitLayout, isHidden, and windowId
       updateTerminal(terminal.id, {
         status: 'spawning',
         requestId,
@@ -996,6 +1059,7 @@ function SimpleTerminalApp() {
         // Explicitly preserve these critical properties
         splitLayout: terminal.splitLayout,
         isHidden: terminal.isHidden,
+        windowId: terminal.windowId, // Preserve window assignment
       })
 
       // Store UPDATED terminal in pending spawns ref (with requestId!)
@@ -1045,17 +1109,43 @@ function SimpleTerminalApp() {
     }
   }
 
-  // Pop out tab to new browser tab
-  const handlePopOutTab = (terminalId: string) => {
+  // Move tab to new window (or existing window if specified)
+  const handlePopOutTab = (terminalId: string, targetWindowId?: string) => {
     const terminal = storedTerminals.find(t => t.id === terminalId)
     if (!terminal) return
 
-    // Open new browser tab with just this terminal
-    const url = `${window.location.origin}${window.location.pathname}?terminal=${terminalId}`
-    window.open(url, `terminal-${terminalId}`)
+    // Generate new window ID if not specified
+    const newWindowId = targetWindowId || `window-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
 
-    console.log(`[SimpleTerminalApp] Popped out ${terminal.name} to new browser tab`)
+    console.log(`[SimpleTerminalApp] Moving ${terminal.name} to new window: ${newWindowId}`)
+
+    // Move terminal to new window
+    updateTerminal(terminalId, { windowId: newWindowId })
+
+    // If this is a split terminal, also move the pane terminals
+    if (terminal.splitLayout && terminal.splitLayout.panes.length > 0) {
+      terminal.splitLayout.panes.forEach(pane => {
+        updateTerminal(pane.terminalId, { windowId: newWindowId })
+      })
+    }
+
+    // Set as active terminal for state persistence (new window will read this)
+    setActiveTerminal(terminalId)
+
+    // Delay to ensure localStorage sync, then open new window
+    setTimeout(() => {
+      const url = `${window.location.origin}${window.location.pathname}?window=${newWindowId}`
+      window.open(url, `tabz-${newWindowId}`)
+    }, 250)
   }
+
+  // Expose handlePopOutTab to window for SortableTab to use
+  useEffect(() => {
+    window.handlePopOutTab = handlePopOutTab
+    return () => {
+      delete window.handlePopOutTab
+    }
+  }, [handlePopOutTab])
 
   const handleCloseTerminal = (terminalId: string) => {
     const terminal = storedTerminals.find(t => t.id === terminalId)
@@ -1131,15 +1221,38 @@ function SimpleTerminalApp() {
 
     console.log('[SimpleTerminalApp] Clearing all sessions...')
 
-    // Close all active terminals via WebSocket
+    // Close all active terminals via WebSocket (including hidden pane terminals from all windows)
+    const allTerminalIds = new Set<string>()
+
     storedTerminals.forEach(terminal => {
-      if (terminal.agentId && wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-        wsRef.current.send(JSON.stringify({
-          type: 'close',
-          terminalId: terminal.agentId,
-        }))
+      if (terminal.agentId) {
+        allTerminalIds.add(terminal.agentId)
+      }
+
+      // Also collect pane terminals from splits
+      if (terminal.splitLayout && terminal.splitLayout.panes.length > 0) {
+        terminal.splitLayout.panes.forEach(pane => {
+          const paneTerminal = storedTerminals.find(t => t.id === pane.terminalId)
+          if (paneTerminal?.agentId) {
+            allTerminalIds.add(paneTerminal.agentId)
+          }
+        })
       }
     })
+
+    // Send close messages for all terminals
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      allTerminalIds.forEach(agentId => {
+        wsRef.current!.send(JSON.stringify({
+          type: 'close',
+          terminalId: agentId,
+        }))
+      })
+      console.log(`[SimpleTerminalApp] Sent close messages for ${allTerminalIds.size} terminals`)
+    }
+
+    // Wait a bit for close messages to be sent
+    await new Promise(resolve => setTimeout(resolve, 300))
 
     // Kill all terminal-tabs tmux sessions (in case some are orphaned)
     // Pattern 'tt-*' only matches sessions like: tt-bash-a3k, tt-cc-x9z, etc.
@@ -1155,6 +1268,12 @@ function SimpleTerminalApp() {
       console.warn('[SimpleTerminalApp] Failed to cleanup tmux sessions:', err)
     }
 
+    // Close WebSocket connection gracefully
+    if (wsRef.current) {
+      wsRef.current.close()
+      wsRef.current = null
+    }
+
     // Clear all terminals from store (will also clear localStorage via persist)
     clearAllTerminals()
 
@@ -1162,6 +1281,9 @@ function SimpleTerminalApp() {
     localStorage.removeItem('tabz-settings')
 
     console.log('[SimpleTerminalApp] ✅ All sessions and settings cleared')
+
+    // Wait a bit more before reload to ensure everything is cleaned up
+    await new Promise(resolve => setTimeout(resolve, 200))
 
     // Reload page to apply fresh defaults
     window.location.reload()
@@ -1659,45 +1781,45 @@ function SimpleTerminalApp() {
         </button>
       </div>
 
-      {/* Tab Bar (hidden in single terminal view) */}
-      {!isSingleTerminalView && <DndContext
-        sensors={sensors}
-        collisionDetection={customCollisionDetection}
-        onDragStart={handleDragStart}
-        onDragOver={handleDragOver}
-        onDragEnd={handleDragEnd}
-      >
-        <SortableContext
-          items={visibleTerminals.map(t => t.id)}
-          strategy={horizontalListSortingStrategy}
+      {/* Tab Bar */}
+      <DndContext
+          sensors={sensors}
+          collisionDetection={customCollisionDetection}
+          onDragStart={handleDragStart}
+          onDragOver={handleDragOver}
+          onDragEnd={handleDragEnd}
         >
-          <div className="tab-bar">
-            {visibleTerminals.map(terminal => {
-              return (
-                <SortableTab
-                  key={terminal.id}
-                  terminal={terminal}
-                  isActive={terminal.id === activeTerminalId}
-                  onActivate={() => setActiveTerminal(terminal.id)}
-                  onClose={(e) => {
-                    e.stopPropagation()
-                    handleCloseTerminal(terminal.id)
-                  }}
-                  dropZone={dropZoneState?.terminalId === terminal.id ? dropZoneState.zone : null}
-                  isDraggedOver={dropZoneState?.terminalId === terminal.id}
-                  mousePosition={mousePosition}
-                />
-              )
-            })}
-            <button
-              className="tab-add"
-              onClick={() => setShowSpawnMenu(!showSpawnMenu)}
-            >
-              +
-            </button>
-          </div>
-        </SortableContext>
-      </DndContext>
+          <SortableContext
+            items={visibleTerminals.map(t => t.id)}
+            strategy={horizontalListSortingStrategy}
+          >
+            <div className="tab-bar">
+              {visibleTerminals.map(terminal => {
+                return (
+                  <SortableTab
+                    key={terminal.id}
+                    terminal={terminal}
+                    isActive={terminal.id === activeTerminalId}
+                    onActivate={() => setActiveTerminal(terminal.id)}
+                    onClose={(e) => {
+                      e.stopPropagation()
+                      handleCloseTerminal(terminal.id)
+                    }}
+                    dropZone={dropZoneState?.terminalId === terminal.id ? dropZoneState.zone : null}
+                    isDraggedOver={dropZoneState?.terminalId === terminal.id}
+                    mousePosition={mousePosition}
+                  />
+                )
+              })}
+              <button
+                className="tab-add"
+                onClick={() => setShowSpawnMenu(!showSpawnMenu)}
+              >
+                +
+              </button>
+            </div>
+          </SortableContext>
+        </DndContext>
 
       {/* Settings Modal */}
       <SettingsModal
@@ -1779,7 +1901,11 @@ function SimpleTerminalApp() {
                 >
                   <SplitLayout
                     terminal={terminal}
-                    terminals={storedTerminals}
+                    terminals={storedTerminals.filter(t => {
+                      // Only pass terminals from this window to prevent cross-window rendering
+                      const terminalWindow = t.windowId || 'main'
+                      return terminalWindow === currentWindowId
+                    })}
                     agents={webSocketAgents}
                     onClose={handleCloseTerminal}
                     onPopOut={handlePopOutPane}

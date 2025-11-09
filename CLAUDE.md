@@ -4,8 +4,8 @@
 
 Tabz (Tab>_) is a **lightweight, tab-based terminal interface** for the web. Built with React, TypeScript, and xterm.js, it provides a simple alternative to complex canvas-based terminal managers.
 
-**Version**: 1.0.0
-**Status**: MVP Complete, Legacy Code Cleaned ✅
+**Version**: 1.1.0
+**Status**: Multi-Window + Split Terminals Complete ✅
 **Architecture**: Tab-based UI with WebSocket terminal backend
 **Extracted from**: [Opustrator](https://github.com/GGPrompts/opustrator) v3.14.2
 **Cleanup Complete**: November 8, 2025 - Removed ~1,000 lines of Opustrator legacy code
@@ -78,6 +78,8 @@ backend/
 ## 🚀 Key Features (MVP Complete)
 
 ✅ **Tab-Based Interface** - Browser-style tabs for terminals
+✅ **Multi-Window Support** - Move tabs between browser windows for multi-monitor setups
+✅ **Split Terminals** - Split tabs horizontally/vertically with independent panes
 ✅ **15 Terminal Types** - Claude Code, Bash, TFE, LazyGit, etc.
 ✅ **Full Terminal Emulation** - xterm.js with WebGL rendering
 ✅ **WebSocket Communication** - Real-time I/O
@@ -99,13 +101,68 @@ backend/
 - **Tab persistence** - Terminals persist through refresh with tmux sessions
 - **Per-tab customization** - Font size, theme, transparency persist per tab
 - **Conditional scrollbar** - Hidden with tmux (default), visible without
+- **Multi-window support** - Move tabs between browser windows with ↗ button
+- **Split terminals** - Horizontal/vertical splits with drag-to-resize
+- **Window isolation** - Each browser window independently manages its terminals
+- **Chrome side panel integration** - Perfect for multi-monitor setups with Chrome's built-in split view + reading list
 
 ### What Needs Work
-- ⚠️ **Tmux footer controls** (split, new window buttons don't work - see NEXT_SESSION_PROMPT.md)
 - Keyboard shortcuts (Ctrl+T, Ctrl+W, Ctrl+Tab)
-- Tab reordering (drag tabs)
+- Tab reordering (drag tabs) - currently can only drag to split
 - Mobile responsiveness improvements
-- Split panes (future - may use bubbletea TUI spawn menu)
+
+---
+
+## 🪟 Multi-Window Support
+
+**NEW in v1.1.0** - Move terminals between browser windows for multi-monitor setups!
+
+### How It Works
+
+Each browser window/tab has a unique ID tracked in the URL (`?window=<id>`):
+- **Main window**: `?window=main` (or no parameter)
+- **Additional windows**: `?window=window-1762685xxx-abc123`
+
+Terminals are assigned to specific windows via the `windowId` property. Each window only shows and connects to its own terminals.
+
+### Using Multi-Window
+
+1. **Move a tab to new window**: Click the ↗ button on any tab
+   - Tab disappears from current window
+   - New browser window opens with that tab
+   - Terminal session stays connected via tmux
+
+2. **Multi-monitor setup**:
+   - Click ↗ on tabs you want on second monitor
+   - Drag new window to second monitor
+   - Each window independently manages its terminals
+
+3. **Chrome side panel workflow** (highly recommended):
+   - Use Chrome's built-in side panel / reading list
+   - Split main window with side panel showing different terminals
+   - Organize terminals across multiple splits and windows
+   - Perfect for 2+ monitor setups
+
+### Technical Details
+
+- **Shared state**: All windows share localStorage via Zustand persist
+- **Independent reconnection**: Each window only reconnects to terminals with matching `windowId`
+- **Backend coordination**: Single WebSocket connection per window, backend routes messages correctly
+- **Persistence**: Window assignments survive refresh/restart
+
+### Example Workflow
+
+```bash
+# Monitor 1: Main development window
+- Tab 1: Claude Code (main)
+- Tab 2: TFE (main)
+
+# Monitor 2: Popped out window
+- Tab 3: Bash (window-abc123) - moved via ↗
+- Tab 4: LazyGit (window-abc123) - moved via ↗
+
+# All terminals persist and reconnect correctly!
+```
 
 ---
 
@@ -147,9 +204,50 @@ Use intuitive aliases in spawn-options:
 
 1. **No Keyboard Shortcuts** - Missing Ctrl+T, Ctrl+W, etc.
 2. **Mobile Untested** - May need responsive CSS work
-3. **Single Window** - Can't pop out tabs (future: window.open())
 
 ## ✅ Recently Fixed (Nov 9, 2025)
+
+### Multi-Window Tab Management
+**Problem:** Need to organize terminals across multiple monitors for efficient workflows.
+
+**Solution:** Implemented window-based terminal management system where each browser window has a unique ID and manages its own set of terminals.
+
+**Key Features:**
+```tsx
+// Window ID assignment
+const currentWindowId = urlParams.get('window') || 'main'
+
+// Terminal filtering per window
+const visibleTerminals = terminals.filter(t =>
+  (t.windowId || 'main') === currentWindowId
+)
+
+// Move terminal to new window
+handlePopOutTab(terminalId) {
+  updateTerminal(terminalId, { windowId: newWindowId })
+  window.open(`?window=${newWindowId}`)
+}
+```
+
+**Critical Fixes:**
+1. **Preserve `windowId` in WebSocket handler** - Prevents terminals from losing window assignment
+2. **Preserve `windowId` in reconnection** - Terminals stay in correct window after refresh
+3. **Filter terminals for SplitLayout** - Prevents cross-window rendering
+4. **Increased localStorage sync delay** - 250ms ensures state persists before new window opens
+
+**Files Modified:**
+- `src/stores/simpleTerminalStore.ts` - Added `windowId` property
+- `src/SimpleTerminalApp.tsx` - Window ID generation, filtering, pop-out logic, WebSocket message handling
+
+**Impact:**
+- Perfect for multi-monitor setups - organize terminals across browser windows
+- Works great with Chrome side panel/reading list for complex layouts
+- Each window independently manages and reconnects to its terminals
+- All windows share state via localStorage, terminal sessions persist via tmux
+
+---
+
+## ✅ Recently Fixed (Nov 9, 2025) - Split Terminals
 
 ### Split Terminal Customization
 **Problem:** Font size and other customization controls in the footer only affected one pane in split terminals, not the currently focused pane.
