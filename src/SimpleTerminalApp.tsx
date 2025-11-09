@@ -13,6 +13,11 @@ import SimpleSpawnService from './services/SimpleSpawnService'
 import { backgroundGradients, getBackgroundCSS } from './styles/terminal-backgrounds'
 import { THEME_BACKGROUNDS, TERMINAL_TYPE_ABBREVIATIONS, COMMAND_ABBREVIATIONS } from './constants/terminalConfig'
 import { generateWindowId, getCurrentWindowId, updateUrlWithWindowId } from './utils/windowUtils'
+import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts'
+import { useTerminalSpawning } from './hooks/useTerminalSpawning'
+import { usePopout } from './hooks/usePopout'
+import { useDragDrop } from './hooks/useDragDrop'
+import { useWebSocketManager } from './hooks/useWebSocketManager'
 import {
   DndContext,
   closestCenter,
@@ -217,27 +222,17 @@ function SortableTab({ terminal, isActive, onActivate, onClose, dropZone, isDrag
 }
 
 function SimpleTerminalApp() {
-  const [webSocketAgents, setWebSocketAgents] = useState<Agent[]>([])
-  const [connectionStatus, setConnectionStatus] = useState<'connected' | 'disconnected' | 'connecting'>('disconnected')
   const [showSpawnMenu, setShowSpawnMenu] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
   const [headerVisible, setHeaderVisible] = useState(true)
-
-  // Drag-and-drop state for drop zones
-  const [draggedTerminalId, setDraggedTerminalId] = useState<string | null>(null)
-  const [dropZoneState, setDropZoneState] = useState<{ terminalId: string; zone: DropZone } | null>(null)
-  const mousePosition = useRef<{ x: number; y: number }>({ x: 0, y: 0 })
 
   // Settings
   const { useTmux, updateSettings } = useSettingsStore()
   const [showCustomizePanel, setShowCustomizePanel] = useState(false)
   const [spawnOptions, setSpawnOptions] = useState<SpawnOption[]>([])
   const spawnOptionsRef = useRef<SpawnOption[]>([]) // Ref to avoid closure issues
-  const wsRef = useRef<WebSocket | null>(null)
   const terminalRef = useRef<any>(null)
-  const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const [reconnectAttempts, setReconnectAttempts] = useState(0)
-  const processedAgentIds = useRef<Set<string>>(new Set())
+  const wsRef = useRef<WebSocket | null>(null) // Needed by both spawning and WebSocket hooks
   const pendingSpawns = useRef<Map<string, StoredTerminal>>(new Map()) // Track pending spawns by requestId
 
   // Multi-window support: each browser window/tab has a unique ID
@@ -261,22 +256,6 @@ function SimpleTerminalApp() {
     setFocusedTerminal,
   } = useSimpleTerminalStore()
 
-  // Drag-and-drop sensors
-  const sensors = useSensors(
-    useSensor(PointerSensor, {
-      activationConstraint: {
-        distance: 8, // Require 8px movement before drag starts (allows clicks to work)
-      },
-    }),
-    useSensor(KeyboardSensor, {
-      coordinateGetter: sortableKeyboardCoordinates,
-    })
-  )
-
-  // Use pointer-only collision detection (no sortable auto-reordering)
-  // We handle reordering manually in handleDragEnd
-  const customCollisionDetection = pointerWithin
-
   // Filter terminals by current window ID
   // Each window only shows terminals that belong to it (or have no windowId yet = default to main window)
   const visibleTerminals = useMemo(() => {
@@ -294,32 +273,24 @@ function SimpleTerminalApp() {
     return filtered
   }, [storedTerminals, currentWindowId])
 
-  // Merge WebSocket agents with stored terminals
-  const agents = useMemo(() => {
-    const activeAgentsMap = new Map(webSocketAgents.map(a => [a.id, a]))
-    const result: Agent[] = []
-    const processedIds = new Set<string>()
-
-    storedTerminals.forEach(terminal => {
-      if (terminal.agentId) {
-        const activeAgent = activeAgentsMap.get(terminal.agentId)
-        if (activeAgent && !processedIds.has(activeAgent.id)) {
-          result.push(activeAgent)
-          processedIds.add(activeAgent.id)
-          activeAgentsMap.delete(terminal.agentId)
-        }
-      }
-    })
-
-    activeAgentsMap.forEach((agent, id) => {
-      if (!processedIds.has(id)) {
-        result.push(agent)
-        processedIds.add(id)
-      }
-    })
-
-    return result
-  }, [webSocketAgents, storedTerminals])
+  // Drag-and-drop logic (extracted to custom hook)
+  const {
+    sensors,
+    handleDragStart,
+    handleDragOver,
+    handleDragEnd,
+    customCollisionDetection,
+    draggedTerminalId,
+    dropZoneState,
+    mousePosition
+  } = useDragDrop(
+    storedTerminals,
+    visibleTerminals,
+    updateTerminal,
+    reorderTerminals,
+    setActiveTerminal,
+    setFocusedTerminal
+  )
 
   // Expose store to window for testing (development only)
   useEffect(() => {
@@ -382,49 +353,6 @@ function SimpleTerminalApp() {
     }
   }, [storedTerminals, currentWindowId]) // Re-run when terminals change (not just length!)
 
-  // Track mouse position for drop zone detection
-  useEffect(() => {
-    const handleMouseMove = (e: MouseEvent) => {
-      mousePosition.current = { x: e.clientX, y: e.clientY }
-
-      // If dragging, continuously update drop zone
-      if (draggedTerminalId && dropZoneState) {
-        const zone = detectDropZone(dropZoneState.terminalId)
-
-        // PREVENT MERGE INTO EXISTING SPLITS: Block edge zones (splits) if target has splits
-        const targetTerminal = storedTerminals.find(t => t.id === dropZoneState.terminalId)
-        if (targetTerminal?.splitLayout && targetTerminal.splitLayout.type !== 'single') {
-          // Check if we're in an edge zone (trying to split)
-          const tabElement = document.querySelector(`[data-tab-id="${dropZoneState.terminalId}"]`)
-          if (tabElement) {
-            const rect = tabElement.getBoundingClientRect()
-            const xPercent = (mousePosition.current.x - rect.left) / rect.width
-            const yPercent = (mousePosition.current.y - rect.top) / rect.height
-            const edgeThreshold = 0.20
-
-            const isEdgeZone =
-              yPercent < edgeThreshold ||
-              yPercent > 1 - edgeThreshold ||
-              xPercent < edgeThreshold ||
-              xPercent > 1 - edgeThreshold
-
-            if (isEdgeZone) {
-              // In edge zone trying to split - don't update zone
-              return
-            }
-          }
-        }
-
-        // Only update if zone actually changed (avoid unnecessary re-renders)
-        if (zone !== dropZoneState.zone) {
-          setDropZoneState({ terminalId: dropZoneState.terminalId, zone })
-        }
-      }
-    }
-    window.addEventListener('mousemove', handleMouseMove)
-    return () => window.removeEventListener('mousemove', handleMouseMove)
-  }, [draggedTerminalId, dropZoneState, storedTerminals])
-
   // Load spawn options from JSON file
   const loadSpawnOptions = () => {
     console.log('[SimpleTerminalApp] 📥 Loading spawn options...')
@@ -449,822 +377,74 @@ function SimpleTerminalApp() {
     loadSpawnOptions()
   }, [])
 
-  // Clear all agentIds on mount - they're always stale after page refresh
-  // This prevents terminals from trying to render with old invalid agentIds
-  const hasHydrated = useRef(false)
-  useEffect(() => {
-    if (!hasHydrated.current && storedTerminals.length > 0) {
-      hasHydrated.current = true
-      console.log('[SimpleTerminalApp] 🧹 Clearing stale agentIds from localStorage terminals')
+  // Terminal spawning logic (extracted to custom hook)
+  const { handleSpawnTerminal: spawnTerminal, handleReconnectTerminal, generateSessionName } = useTerminalSpawning(
+    currentWindowId,
+    useTmux,
+    wsRef,
+    pendingSpawns
+  )
 
-      storedTerminals.forEach(terminal => {
-        if (terminal.agentId || terminal.status === 'active') {
-          updateTerminal(terminal.id, {
-            agentId: undefined,
-            status: 'spawning', // Will be updated to 'active' after reconnection
-          })
+  // WebSocket connection management (extracted to custom hook)
+  // Must be called after useTerminalSpawning to use handleReconnectTerminal
+  const { webSocketAgents, connectionStatus, setWebSocketAgents } = useWebSocketManager(
+    currentWindowId,
+    storedTerminals,
+    activeTerminalId,
+    spawnOptions,
+    spawnOptionsRef,
+    useTmux,
+    pendingSpawns,
+    updateTerminal,
+    removeTerminal,
+    setActiveTerminal,
+    handleReconnectTerminal
+  )
+
+  // Merge WebSocket agents with stored terminals
+  const agents = useMemo(() => {
+    const activeAgentsMap = new Map(webSocketAgents.map(a => [a.id, a]))
+    const result: Agent[] = []
+    const processedIds = new Set<string>()
+
+    storedTerminals.forEach(terminal => {
+      if (terminal.agentId) {
+        const activeAgent = activeAgentsMap.get(terminal.agentId)
+        if (activeAgent && !processedIds.has(activeAgent.id)) {
+          result.push(activeAgent)
+          processedIds.add(activeAgent.id)
+          activeAgentsMap.delete(terminal.agentId)
         }
-      })
-    }
-  }, [storedTerminals.length]) // Run when terminals are hydrated from localStorage
-
-  // Query for tmux sessions after both spawn options load AND WebSocket connects
-  const hasQueriedSessions = useRef(false)
-  useEffect(() => {
-    console.log('[SimpleTerminalApp] 🔍 Checking reconnection conditions:', {
-      connectionStatus,
-      spawnOptionsCount: spawnOptions.length,
-      storedTerminalsCount: storedTerminals.length,
-      useTmux,
-      hasQueried: hasQueriedSessions.current,
-      wsReady: !!wsRef.current
+      }
     })
 
-    if (
-      connectionStatus === 'connected' &&
-      spawnOptions.length > 0 &&
-      storedTerminals.length > 0 &&
-      useTmux &&
-      !hasQueriedSessions.current &&
-      wsRef.current
-    ) {
-      console.log('[SimpleTerminalApp] ✅ All conditions met! Querying for active tmux sessions...')
-      wsRef.current.send(JSON.stringify({ type: 'query-tmux-sessions' }))
-      hasQueriedSessions.current = true
-    } else if (storedTerminals.length > 0 && useTmux) {
-      console.log('[SimpleTerminalApp] ⏳ Waiting for conditions:', {
-        needsConnection: connectionStatus !== 'connected',
-        needsSpawnOptions: spawnOptions.length === 0,
-        alreadyQueried: hasQueriedSessions.current
-      })
-    }
-  }, [connectionStatus, spawnOptions.length, storedTerminals.length, useTmux])
-
-  // Reset query flag on disconnect
-  useEffect(() => {
-    if (connectionStatus === 'disconnected') {
-      hasQueriedSessions.current = false
-    }
-  }, [connectionStatus])
-
-  // Initialize WebSocket
-  useEffect(() => {
-    SimpleSpawnService.initialize(wsRef)
-    connectWebSocket()
-
-    return () => {
-      if (reconnectTimeoutRef.current) {
-        clearTimeout(reconnectTimeoutRef.current)
-        reconnectTimeoutRef.current = null
+    activeAgentsMap.forEach((agent, id) => {
+      if (!processedIds.has(id)) {
+        result.push(agent)
+        processedIds.add(id)
       }
+    })
 
-      if (wsRef.current) {
-        wsRef.current.onerror = null
-        wsRef.current.onclose = null
-        wsRef.current.close(1000, 'Component unmounting')
-        wsRef.current = null
-      }
-    }
-  }, [])
+    return result
+  }, [webSocketAgents, storedTerminals])
 
-  // Track last closed terminal for Ctrl+Shift+T
-  const lastClosedTerminalRef = useRef<{ terminalType: string; icon?: string; name: string } | null>(null)
-
-  // Handle keyboard shortcuts
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      // Escape key to close spawn menu
-      if (e.key === 'Escape' && showSpawnMenu) {
-        setShowSpawnMenu(false)
-        return
-      }
-
-      // Ctrl+T - Spawn first option (default)
-      if (e.ctrlKey && e.key === 't') {
-        e.preventDefault()
-        if (spawnOptions.length > 0) {
-          handleSpawnTerminal(spawnOptions[0])
-        } else {
-          setShowSpawnMenu(prev => !prev)
-        }
-        return
-      }
-
-      // Ctrl+W - Close active tab
-      if (e.ctrlKey && e.key === 'w') {
-        e.preventDefault()
-        if (activeTerminalId) {
-          const terminal = storedTerminals.find(t => t.id === activeTerminalId)
-          if (terminal) {
-            lastClosedTerminalRef.current = {
-              terminalType: terminal.terminalType,
-              icon: terminal.icon,
-              name: terminal.name,
-            }
-          }
-          handleCloseTerminal(activeTerminalId)
-        }
-        return
-      }
-
-      // Ctrl+Tab - Next tab
-      if (e.ctrlKey && e.key === 'Tab' && !e.shiftKey) {
-        e.preventDefault()
-        if (visibleTerminals.length > 0) {
-          const currentIndex = visibleTerminals.findIndex(t => t.id === activeTerminalId)
-          const nextIndex = (currentIndex + 1) % visibleTerminals.length
-          setActiveTerminal(visibleTerminals[nextIndex].id)
-        }
-        return
-      }
-
-      // Ctrl+Shift+Tab - Previous tab
-      if (e.ctrlKey && e.shiftKey && e.key === 'Tab') {
-        e.preventDefault()
-        if (visibleTerminals.length > 0) {
-          const currentIndex = visibleTerminals.findIndex(t => t.id === activeTerminalId)
-          const prevIndex = currentIndex <= 0 ? visibleTerminals.length - 1 : currentIndex - 1
-          setActiveTerminal(visibleTerminals[prevIndex].id)
-        }
-        return
-      }
-
-      // Ctrl+Shift+T - Reopen last closed tab
-      if (e.ctrlKey && e.shiftKey && e.key === 'T') {
-        e.preventDefault()
-        if (lastClosedTerminalRef.current) {
-          const option = spawnOptions.find(
-            opt => opt.terminalType === lastClosedTerminalRef.current!.terminalType
-          )
-          if (option) {
-            handleSpawnTerminal(option)
-          }
-        }
-        return
-      }
-
-      // Ctrl+1-9 - Jump to tab N
-      if (e.ctrlKey && e.key >= '1' && e.key <= '9') {
-        e.preventDefault()
-        const tabIndex = parseInt(e.key) - 1
-        if (tabIndex < visibleTerminals.length) {
-          setActiveTerminal(visibleTerminals[tabIndex].id)
-        }
-        return
-      }
-    }
-
-    window.addEventListener('keydown', handleKeyDown)
-    return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [showSpawnMenu, activeTerminalId, visibleTerminals, spawnOptions])
-
-  const connectWebSocket = () => {
-    if (reconnectTimeoutRef.current) {
-      clearTimeout(reconnectTimeoutRef.current)
-      reconnectTimeoutRef.current = null
-    }
-
-    setConnectionStatus('connecting')
-    processedAgentIds.current.clear()
-
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-    let wsUrl: string
-    if (import.meta.env.DEV) {
-      wsUrl = `${protocol}//${window.location.host}/ws`
-    } else {
-      const backendPort = import.meta.env.VITE_BACKEND_PORT || '8127'
-      const host = window.location.hostname || 'localhost'
-      wsUrl = `${protocol}//${host}:${backendPort}/ws`
-    }
-
-    const ws = new WebSocket(wsUrl)
-
-    ws.onopen = () => {
-      setConnectionStatus('connected')
-      setReconnectAttempts(0)
-      // Note: Reconnection query happens in separate useEffect after spawn options load
-    }
-
-    ws.onclose = (evt) => {
-      setConnectionStatus('disconnected')
-
-      // CRITICAL FIX: Clear old agents when disconnecting
-      // This prevents frontend from trying to send messages to old backend IDs
-      setWebSocketAgents([])
-      processedAgentIds.current.clear()
-
-      // Also clear agentIds from all terminals (will be re-assigned on reconnect)
-      storedTerminals.forEach(terminal => {
-        if (terminal.agentId || terminal.status === 'active') {
-          updateTerminal(terminal.id, {
-            agentId: undefined,
-            status: 'spawning', // Will be updated to 'active' after reconnection
-          })
-        }
-      })
-
-      if (evt.code === 1000 || evt.code === 1001) {
-        return
-      }
-
-      const MAX_RECONNECT_ATTEMPTS = 10
-      if (reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
-        console.error('Maximum reconnection attempts reached')
-        return
-      }
-
-      const baseDelay = 1000
-      const maxDelay = 30000
-      const retryDelay = Math.min(baseDelay * Math.pow(2, reconnectAttempts), maxDelay)
-
-      setReconnectAttempts(prev => prev + 1)
-      reconnectTimeoutRef.current = setTimeout(connectWebSocket, retryDelay)
-    }
-
-    ws.onerror = (error) => {
-      if (ws.readyState === WebSocket.CONNECTING) {
-        console.warn('WebSocket connection failed, will retry...')
-      }
-    }
-
-    ws.onmessage = (event) => {
-      try {
-        const message = JSON.parse(event.data)
-        handleWebSocketMessage(message)
-      } catch (error) {
-        console.error('Failed to parse WebSocket message:', error)
-      }
-    }
-
-    wsRef.current = ws
-  }
-
-  const handleWebSocketMessage = (message: any) => {
-    switch (message.type) {
-      case 'terminal-spawned':
-        if (message.data) {
-          if (processedAgentIds.current.has(message.data.id)) {
-            return
-          }
-
-          // Debug: Show all stored terminals and what we're looking for
-          console.log('[SimpleTerminalApp] Looking for requestId:', message.requestId)
-          console.log('[SimpleTerminalApp] Stored terminals:', storedTerminals.map(t => ({
-            id: t.id,
-            requestId: t.requestId,
-            status: t.status,
-            type: t.terminalType,
-            windowId: t.windowId
-          })))
-          console.log('[SimpleTerminalApp] Pending spawns:', Array.from(pendingSpawns.current.keys()))
-
-          // FIRST: Check pendingSpawns ref (synchronous, no race condition!)
-          let existingTerminal = pendingSpawns.current.get(message.requestId)
-          console.log('[SimpleTerminalApp] Found in pendingSpawns ref?', !!existingTerminal)
-
-          // SECOND: Check state (in case ref was cleared but state updated)
-          if (!existingTerminal) {
-            existingTerminal = storedTerminals.find(t => t.requestId === message.requestId)
-            console.log('[SimpleTerminalApp] Found in state by requestId?', !!existingTerminal)
-          }
-
-          // Fallback 1: Check if this agent already has a stored terminal
-          if (!existingTerminal) {
-            existingTerminal = storedTerminals.find(t => t.agentId === message.data.id)
-            console.log('[SimpleTerminalApp] Found by agentId?', !!existingTerminal)
-          }
-
-          // Fallback 2: Find the most recent spawning terminal of same type (for reconnections)
-          if (!existingTerminal) {
-            existingTerminal = storedTerminals
-              .filter(t => t.status === 'spawning' && t.terminalType === message.data.terminalType)
-              .sort((a, b) => b.createdAt - a.createdAt)[0]
-            console.log('[SimpleTerminalApp] Found by type?', !!existingTerminal)
-          }
-
-          // CRITICAL: Only update terminals that belong to THIS window
-          // Check this BEFORE adding to webSocketAgents to prevent cross-window contamination
-          if (existingTerminal) {
-            const terminalWindow = existingTerminal.windowId || 'main'
-            if (terminalWindow !== currentWindowId) {
-              console.log('[SimpleTerminalApp] ⏭️ Ignoring terminal-spawned for different window:', existingTerminal.id, 'belongs to:', terminalWindow, 'current:', currentWindowId)
-              return
-            }
-
-            console.log('[SimpleTerminalApp] ✅ Matched terminal:', existingTerminal.id, 'requestId:', message.requestId)
-
-            // Now that we've verified it belongs to THIS window, add to webSocketAgents
-            processedAgentIds.current.add(message.data.id)
-
-            setWebSocketAgents(prev => {
-              const existingIndex = prev.findIndex(a => a.id === message.data.id)
-              if (existingIndex !== -1) {
-                const updated = [...prev]
-                updated[existingIndex] = {
-                  ...message.data,
-                  status: message.data.state || message.data.status || 'active',
-                }
-                return updated
-              }
-              return [...prev, {
-                ...message.data,
-                status: message.data.state || message.data.status || 'active',
-              }]
-            })
-
-            // Log if this is a split-related terminal
-            if (existingTerminal.splitLayout && existingTerminal.splitLayout.type !== 'single') {
-              console.log('[SimpleTerminalApp] ✅ Split container agent connected:', message.data.id)
-            }
-            if (existingTerminal.isHidden) {
-              console.log('[SimpleTerminalApp] ✅ Hidden terminal agent connected:', message.data.id)
-            }
-
-            // Clear from pending spawns ref
-            if (message.requestId) {
-              pendingSpawns.current.delete(message.requestId)
-              console.log('[SimpleTerminalApp] Cleared from pendingSpawns ref')
-            }
-
-            // Update existing terminal with agent info - PRESERVE splitLayout, isHidden, and windowId
-            updateTerminal(existingTerminal.id, {
-              agentId: message.data.id,
-              sessionName: message.data.sessionName,
-              status: 'active',
-              requestId: undefined, // Clear requestId after matching
-              // Explicitly preserve critical properties
-              splitLayout: existingTerminal.splitLayout,
-              isHidden: existingTerminal.isHidden,
-              windowId: existingTerminal.windowId, // CRITICAL: Preserve window assignment
-            })
-          } else {
-            // CRITICAL: Do NOT create a new terminal for unmatched spawns
-            // This prevents cross-window contamination where Window 1 adopts terminals spawned in Window 2
-            console.warn('[SimpleTerminalApp] ⏭️ Ignoring terminal-spawned - no matching terminal in this window for requestId:', message.requestId, 'agentId:', message.data.id)
-            console.log('[SimpleTerminalApp] This terminal belongs to a different window or was spawned outside this session')
-            // Early return - do not add to webSocketAgents, do not create a terminal
-            return
-          }
-        }
-        break
-
-      case 'terminal-output':
-        if (message.terminalId && message.data) {
-          // Dispatch custom event for Terminal component to handle
-          window.dispatchEvent(new CustomEvent('terminal-output', {
-            detail: {
-              terminalId: message.terminalId,
-              data: message.data,
-            },
-          }))
-        }
-        break
-
-      case 'terminal-closed':
-        if (message.data && message.data.id) {
-          setWebSocketAgents(prev => prev.filter(a => a.id !== message.data.id))
-
-          // Find terminal with this agentId
-          const terminal = storedTerminals.find(t => t.agentId === message.data.id)
-          if (terminal) {
-            console.log(`[SimpleTerminalApp] Terminal exited: ${terminal.name}`)
-
-            // If this is a hidden terminal (part of a split), handle specially
-            if (terminal.isHidden) {
-              console.log(`[SimpleTerminalApp] Exited terminal is part of a split, removing from split`)
-              // Find the split container that has this pane
-              const splitContainer = storedTerminals.find(t =>
-                t.splitLayout?.panes?.some(p => p.terminalId === terminal.id)
-              )
-
-              if (splitContainer && splitContainer.splitLayout) {
-                const remainingPanes = splitContainer.splitLayout.panes.filter(
-                  p => p.terminalId !== terminal.id
-                )
-
-                if (remainingPanes.length === 1) {
-                  // Only 1 pane left - convert to single terminal
-                  console.log(`[SimpleTerminalApp] Only 1 pane remaining, converting to single terminal`)
-                  updateTerminal(splitContainer.id, {
-                    splitLayout: { type: 'single', panes: [] }
-                  })
-                  // Unhide the remaining pane
-                  const remainingPaneTerminalId = remainingPanes[0].terminalId
-                  updateTerminal(remainingPaneTerminalId, { isHidden: false })
-                } else if (remainingPanes.length > 1) {
-                  // Still have multiple panes
-                  updateTerminal(splitContainer.id, {
-                    splitLayout: {
-                      ...splitContainer.splitLayout,
-                      panes: remainingPanes
-                    }
-                  })
-                }
-              }
-            }
-
-            // Remove the terminal from store
-            removeTerminal(terminal.id)
-
-            // After removal, check if we need to switch active terminal or close window
-            // Note: We check visibleTerminals AFTER removal, so it won't include the just-removed terminal
-            setTimeout(() => {
-              const currentVisibleTerminals = storedTerminals.filter(t => {
-                const terminalWindow = t.windowId || 'main'
-                return terminalWindow === currentWindowId && !t.isHidden
-              })
-
-              if (activeTerminalId === terminal.id) {
-                if (currentVisibleTerminals.length > 0) {
-                  console.log(`[SimpleTerminalApp] Switching to next terminal: ${currentVisibleTerminals[0].name}`)
-                  setActiveTerminal(currentVisibleTerminals[0].id)
-                } else {
-                  console.log(`[SimpleTerminalApp] No remaining terminals in this window`)
-                  setActiveTerminal(null)
-
-                  // Only close popped-out windows, not the main window
-                  if (currentWindowId !== 'main') {
-                    console.log(`[SimpleTerminalApp] Closing empty popped-out window in 1 second...`)
-                    setTimeout(() => {
-                      window.close()
-                    }, 1000) // Give user time to see what happened
-                  }
-                }
-              }
-            }, 100) // Small delay to ensure state has updated
-          }
-        }
-        break
-
-      case 'tmux-sessions-list':
-        if (message.data && message.data.sessions) {
-          const activeSessions = new Set(message.data.sessions)
-          const currentSpawnOptions = spawnOptionsRef.current // Use ref to avoid closure issues
-
-          console.log('[SimpleTerminalApp] 📋 Active tmux sessions:', Array.from(activeSessions))
-          console.log('[SimpleTerminalApp] 💾 Stored terminals:', storedTerminals.map(t => ({
-            id: t.id.slice(-8),
-            sessionName: t.sessionName,
-            status: t.status,
-            terminalType: t.terminalType,
-            isHidden: t.isHidden
-          })))
-          console.log('[SimpleTerminalApp] 📦 Spawn options loaded:', currentSpawnOptions.length)
-
-          // Track which sessions we've already started reconnecting (prevent duplicates)
-          const reconnectingSessionsSet = new Set<string>()
-
-          // Process stored terminals
-          storedTerminals.forEach(terminal => {
-            if (terminal.sessionName && activeSessions.has(terminal.sessionName)) {
-              // Skip if we're already reconnecting this session
-              if (reconnectingSessionsSet.has(terminal.sessionName)) {
-                console.log(`[SimpleTerminalApp] ⏭️ Skipping duplicate reconnection for session: ${terminal.sessionName}`)
-                return
-              }
-
-              // Skip reconnecting to terminals that belong to other windows
-              const terminalWindow = terminal.windowId || 'main'
-              if (terminalWindow !== currentWindowId) {
-                console.log(`[SimpleTerminalApp] ⏭️ Skipping reconnection for terminal in different window: ${terminal.sessionName}`)
-                return
-              }
-
-              reconnectingSessionsSet.add(terminal.sessionName)
-              // Session exists! Reconnect by respawning (backend will auto-attach)
-              console.log(`[SimpleTerminalApp] 🔄 Reconnecting to session: ${terminal.sessionName}`)
-
-              // Find spawn option - prioritize matching by command, fallback to terminalType
-              let option = terminal.command
-                ? currentSpawnOptions.find(opt => opt.command === terminal.command)
-                : null
-
-              if (!option) {
-                // Fallback: find by terminalType (for terminals without command stored)
-                option = currentSpawnOptions.find(opt => opt.terminalType === terminal.terminalType)
-              }
-
-              if (option) {
-                // Respawn with existing sessionName (backend will reconnect)
-                handleReconnectTerminal(terminal, option)
-              } else {
-                console.warn(`[SimpleTerminalApp] ⚠️ No spawn option found for command: ${terminal.command}, type: ${terminal.terminalType}`)
-                console.log('[SimpleTerminalApp] Available spawn options:', currentSpawnOptions.map(o => ({ command: o.command, type: o.terminalType })))
-                // Mark as error but don't remove - user might add the spawn option later
-                updateTerminal(terminal.id, { status: 'error' })
-              }
-            } else if (terminal.sessionName) {
-              // Session is dead, remove terminal from store
-              console.log(`[SimpleTerminalApp] ❌ Session ${terminal.sessionName} not found, removing terminal`)
-              removeTerminal(terminal.id)
-            }
-            // If no sessionName, it's a non-tmux terminal, leave it alone
-          })
-        }
-        break
-    }
-  }
-
-  // Generate short session name like "tt-cc-a3k" (Tabz - Claude Code - random suffix)
-  const generateSessionName = (terminalType: string, label?: string, command?: string): string => {
-    // Check command-specific abbreviations first (TFE, LazyGit, etc.)
-    let abbrev: string
-    if (command && COMMAND_ABBREVIATIONS[command]) {
-      abbrev = COMMAND_ABBREVIATIONS[command]
-    } else {
-      abbrev = TERMINAL_TYPE_ABBREVIATIONS[terminalType] || terminalType.slice(0, 4)
-    }
-
-    // Use random 3-char suffix to avoid collisions (like "tt-cc-a3k")
-    // This ensures unique names even if localStorage is cleared but tmux sessions remain
-    const suffix = Math.random().toString(36).substring(2, 5)
-    return `tt-${abbrev}-${suffix}`
-  }
-
+  // Wrapper to close spawn menu before spawning
   const handleSpawnTerminal = async (option: SpawnOption) => {
     setShowSpawnMenu(false)
-
-    try {
-      // Generate requestId FIRST
-      const requestId = `spawn-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
-
-      // Generate short session name (e.g., "tt-cc-1", "tt-tfe-1")
-      const sessionName = useTmux ? generateSessionName(option.terminalType, option.label, option.command) : undefined
-
-      // Create placeholder terminal IMMEDIATELY (before spawn)
-      const newTerminal: StoredTerminal = {
-        id: `terminal-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-        name: option.label,
-        terminalType: option.terminalType,
-        command: option.command, // Store original command for matching during reconnection
-        icon: option.icon,
-        workingDir: option.workingDir || '~',
-        theme: option.defaultTheme,
-        background: option.defaultBackground || THEME_BACKGROUNDS[option.defaultTheme || 'default'] || 'dark-neutral',
-        transparency: option.defaultTransparency,
-        fontSize: option.defaultFontSize || useSettingsStore.getState().terminalDefaultFontSize,
-        fontFamily: option.defaultFontFamily,
-        sessionName, // Store session name for persistence
-        createdAt: Date.now(),
-        status: 'spawning',
-        requestId, // Store requestId for matching with WebSocket response
-        windowId: currentWindowId, // Assign to current window
-      }
-
-      // Store in ref FIRST (synchronous, no race condition)
-      pendingSpawns.current.set(requestId, newTerminal)
-
-      // Then add to state (async)
-      addTerminal(newTerminal)
-      console.log('[SimpleTerminalApp] Created placeholder terminal with requestId:', requestId, 'sessionName:', sessionName)
-
-      // Explicitly set as active in THIS window (addTerminal no longer does this automatically)
-      setActiveTerminal(newTerminal.id)
-
-      // Build config
-      const config: any = {
-        terminalType: option.terminalType,
-        name: option.label,
-        workingDir: option.workingDir || '~',
-        theme: option.defaultTheme,
-        transparency: option.defaultTransparency,
-        size: { width: 800, height: 600 },
-        useTmux,  // Pass tmux setting from store
-        sessionName,  // Short session name like "tt-cc-1"
-        resumable: useTmux,  // CRITICAL: Make sessions persistent when using tmux!
-      }
-
-      // Convert command to commands array (like opustrator)
-      // TUI tools use toolName, others use commands array
-      if (option.terminalType === 'tui-tool') {
-        config.toolName = option.command
-      } else if (option.command) {
-        config.commands = [option.command]
-        config.startCommand = option.command  // For reconnection
-      }
-
-      console.log('[SimpleTerminalApp] Spawning with config (useTmux:', useTmux, '):', config)
-
-      // Send spawn request (now we already have the placeholder in state)
-      // We can await here safely because placeholder is already created
-      const returnedRequestId = await SimpleSpawnService.spawn({ config, requestId })
-
-      if (!returnedRequestId) {
-        console.error('Failed to spawn terminal')
-        updateTerminal(newTerminal.id, { status: 'error' })
-        return
-      }
-
-      // Status will be updated to 'active' when WebSocket receives terminal-spawned
-    } catch (error) {
-      console.error('Error spawning terminal:', error)
-    }
+    await spawnTerminal(option)
   }
 
-  const handleReconnectTerminal = async (terminal: StoredTerminal, option: SpawnOption) => {
-    try {
-      // Log split layout preservation
-      if (terminal.splitLayout && terminal.splitLayout.type !== 'single') {
-        console.log(`[SimpleTerminalApp] 🔄 Reconnecting split container:`, terminal.id, {
-          splitType: terminal.splitLayout.type,
-          panes: terminal.splitLayout.panes.map(p => ({
-            terminalId: p.terminalId,
-            position: p.position
-          }))
-        })
-      }
-
-      if (terminal.isHidden) {
-        console.log(`[SimpleTerminalApp] 🔄 Reconnecting hidden terminal (part of split):`, terminal.id)
-      }
-
-      // Generate requestId for reconnection
-      const requestId = `reconnect-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
-
-      // Create updated terminal object - PRESERVE splitLayout and isHidden!
-      const updatedTerminal = {
-        ...terminal,
-        status: 'spawning' as const,
-        requestId,
-        agentId: undefined, // Clear old agentId (will get new one from backend)
-        // splitLayout is preserved via spread operator
-        // isHidden is preserved via spread operator
-      }
-
-      // Update terminal state - EXPLICITLY preserve splitLayout, isHidden, and windowId
-      updateTerminal(terminal.id, {
-        status: 'spawning',
-        requestId,
-        agentId: undefined,
-        // Explicitly preserve these critical properties
-        splitLayout: terminal.splitLayout,
-        isHidden: terminal.isHidden,
-        windowId: terminal.windowId, // Preserve window assignment
-      })
-
-      // Store UPDATED terminal in pending spawns ref (with requestId!)
-      pendingSpawns.current.set(requestId, updatedTerminal)
-
-      console.log(`[SimpleTerminalApp] Reconnecting terminal ${terminal.id} to session ${terminal.sessionName}`)
-
-      // Build config with EXISTING sessionName (backend will detect and reconnect)
-      const config: any = {
-        terminalType: option.terminalType,
-        name: option.label,
-        workingDir: terminal.workingDir || option.workingDir || '~',
-        theme: terminal.theme || option.defaultTheme,
-        background: terminal.background || option.defaultBackground || THEME_BACKGROUNDS[terminal.theme || 'default'] || 'dark-neutral',
-        transparency: terminal.transparency ?? option.defaultTransparency,
-        fontSize: terminal.fontSize ?? option.defaultFontSize ?? useSettingsStore.getState().terminalDefaultFontSize,
-        fontFamily: terminal.fontFamily ?? option.defaultFontFamily ?? useSettingsStore.getState().terminalDefaultFontFamily ?? 'monospace',
-        size: { width: 800, height: 600 },
-        useTmux: true, // Must be true for reconnection
-        sessionName: terminal.sessionName, // CRITICAL: Use existing session name!
-        resumable: true, // CRITICAL: Must be resumable for persistence!
-      }
-
-      // Add command/toolName
-      if (option.terminalType === 'tui-tool') {
-        config.toolName = option.command
-      } else if (option.command) {
-        config.commands = [option.command]
-        config.startCommand = option.command
-      }
-
-      console.log('[SimpleTerminalApp] Reconnecting with config:', config)
-
-      // Send spawn request (backend will detect existing session and reconnect)
-      const returnedRequestId = await SimpleSpawnService.spawn({ config, requestId })
-
-      if (!returnedRequestId) {
-        console.error('Failed to reconnect terminal')
-        updateTerminal(terminal.id, { status: 'error' })
-        return
-      }
-
-      // Status will be updated to 'active' when WebSocket receives terminal-spawned
-    } catch (error) {
-      console.error('Error reconnecting terminal:', error)
-      updateTerminal(terminal.id, { status: 'error' })
-    }
-  }
-
-  // Move tab to new window (or existing window if specified)
-  const handlePopOutTab = async (terminalId: string, targetWindowId?: string) => {
-    const terminal = storedTerminals.find(t => t.id === terminalId)
-    if (!terminal) return
-
-    // Generate new window ID if not specified
-    const newWindowId = targetWindowId || generateWindowId()
-
-    console.log(`[SimpleTerminalApp] Popping out ${terminal.name} to window: ${newWindowId}`)
-
-    // Collect all session names to detach (terminal + split panes)
-    const sessionsToDetach: string[] = []
-    if (terminal.sessionName) {
-      sessionsToDetach.push(terminal.sessionName)
-    }
-    if (terminal.splitLayout && terminal.splitLayout.panes.length > 0) {
-      terminal.splitLayout.panes.forEach(pane => {
-        const paneTerminal = storedTerminals.find(t => t.id === pane.terminalId)
-        if (paneTerminal?.sessionName) {
-          sessionsToDetach.push(paneTerminal.sessionName)
-        }
-      })
-    }
-
-    // Step 1: Update state - move to new window and clear agent IDs
-    console.log(`[SimpleTerminalApp] Step 1: Updating state (windowId=${newWindowId}, detaching ${sessionsToDetach.length} sessions)`)
-    updateTerminal(terminalId, {
-      agentId: undefined,
-      status: 'spawning',
-      windowId: newWindowId,
-    })
-
-    // Update split panes
-    if (terminal.splitLayout && terminal.splitLayout.panes.length > 0) {
-      terminal.splitLayout.panes.forEach(pane => {
-        updateTerminal(pane.terminalId, {
-          agentId: undefined,
-          status: 'spawning',
-          windowId: newWindowId,
-        })
-      })
-    }
-
-    // Step 2: Switch away from this terminal in current window
-    if (activeTerminalId === terminalId) {
-      const remainingTerminals = visibleTerminals.filter(t =>
-        t.id !== terminalId &&
-        (t.windowId || 'main') === currentWindowId
-      )
-      if (remainingTerminals.length > 0) {
-        setActiveTerminal(remainingTerminals[0].id)
-        console.log(`[SimpleTerminalApp] Step 2: Switched to ${remainingTerminals[0].name}`)
-      } else {
-        setActiveTerminal(null)
-        console.log(`[SimpleTerminalApp] Step 2: No remaining terminals, cleared active`)
-      }
-    }
-
-    // Step 3: Detach from tmux sessions using API (for tmux terminals)
-    if (sessionsToDetach.length > 0 && useTmux) {
-      console.log(`[SimpleTerminalApp] Step 3: Detaching from ${sessionsToDetach.length} tmux sessions via API`)
-      // Detach from all sessions concurrently
-      await Promise.all(
-        sessionsToDetach.map(async (sessionName) => {
-          try {
-            const response = await fetch(`/api/tmux/detach/${sessionName}`, {
-              method: 'POST',
-            })
-            const result = await response.json()
-            if (result.success) {
-              console.log(`[SimpleTerminalApp] ✓ Detached from tmux session: ${sessionName}`)
-            } else {
-              console.warn(`[SimpleTerminalApp] Failed to detach from ${sessionName}:`, result.error)
-            }
-          } catch (error) {
-            console.error(`[SimpleTerminalApp] Error detaching from ${sessionName}:`, error)
-          }
-        })
-      )
-    } else {
-      // For non-tmux terminals, send WebSocket detach
-      const agentsToDetach: string[] = []
-      if (terminal.agentId) agentsToDetach.push(terminal.agentId)
-      if (terminal.splitLayout && terminal.splitLayout.panes.length > 0) {
-        terminal.splitLayout.panes.forEach(pane => {
-          const paneTerminal = storedTerminals.find(t => t.id === pane.terminalId)
-          if (paneTerminal?.agentId) agentsToDetach.push(paneTerminal.agentId)
-        })
-      }
-
-      if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN && agentsToDetach.length > 0) {
-        console.log(`[SimpleTerminalApp] Step 3: Sending ${agentsToDetach.length} WebSocket detach messages`)
-        agentsToDetach.forEach(agentId => {
-          wsRef.current!.send(JSON.stringify({
-            type: 'detach',
-            terminalId: agentId,
-          }))
-        })
-      }
-    }
-
-    // Step 4: Wait for state to sync and detaches to process, then open new window
-    // New window will see updated windowId in localStorage and reconnect automatically
-    // CRITICAL: Must wait for Zustand localStorage sync (debounced with 100ms delay)
-    // to complete before opening new window, otherwise new window won't see updated windowId
-    setTimeout(() => {
-      console.log(`[SimpleTerminalApp] Step 4: Opening new window`)
-      // Pass both windowId AND the terminalId to activate in the new window
-      const url = `${window.location.origin}${window.location.pathname}?window=${newWindowId}&active=${terminalId}`
-      const newWin = window.open(url, `tabz-${newWindowId}`)
-
-      if (!newWin) {
-        console.error('[SimpleTerminalApp] Failed to open new window (popup blocked?)')
-      }
-    }, 600) // Increased from 400ms to ensure localStorage sync completes (100ms debounce + 500ms buffer)
-  }
+  // Multi-window popout logic (extracted to custom hook)
+  const { handlePopOutTab } = usePopout(
+    currentWindowId,
+    storedTerminals,
+    activeTerminalId,
+    visibleTerminals,
+    useTmux,
+    wsRef,
+    updateTerminal,
+    setActiveTerminal
+  )
 
   // Expose handlePopOutTab to window for SortableTab to use
   useEffect(() => {
@@ -1287,6 +467,19 @@ function SimpleTerminalApp() {
     }
     removeTerminal(terminalId)
   }
+
+  // Keyboard shortcuts (extracted to custom hook)
+  // Must be called after handleSpawnTerminal and handleCloseTerminal are defined
+  useKeyboardShortcuts(
+    showSpawnMenu,
+    activeTerminalId,
+    visibleTerminals,
+    spawnOptions,
+    setShowSpawnMenu,
+    setActiveTerminal,
+    handleSpawnTerminal,
+    handleCloseTerminal
+  )
 
   // Pop out pane to new tab (undo split)
   const handlePopOutPane = (paneTerminalId: string) => {
@@ -1425,216 +618,6 @@ function SimpleTerminalApp() {
           terminalId: terminal.agentId,
           command,
         }))
-      }
-    }
-  }
-
-  // Detect drop zone based on actual mouse position over element
-  // NEW MODEL: All 4 edges = split, center = reorder
-  const detectDropZone = (overTabId: string): DropZone => {
-    // Get the DOM element for the tab being hovered over
-    const tabElement = document.querySelector(`[data-tab-id="${overTabId}"]`)
-    if (!tabElement) return 'center'
-
-    const rect = tabElement.getBoundingClientRect()
-    const mouseX = mousePosition.current.x
-    const mouseY = mousePosition.current.y
-
-    // Calculate relative position within the tab
-    const relativeX = mouseX - rect.left
-    const relativeY = mouseY - rect.top
-
-    // Calculate percentages (0-1)
-    const xPercent = relativeX / rect.width
-    const yPercent = relativeY / rect.height
-
-    // Edge zones for SPLITS (20% on all sides)
-    const edgeThreshold = 0.20
-
-    // Check all 4 edges (priority: top/bottom first, then left/right)
-    if (yPercent < edgeThreshold) return 'top'
-    if (yPercent > 1 - edgeThreshold) return 'bottom'
-    if (xPercent < edgeThreshold) return 'left'
-    if (xPercent > 1 - edgeThreshold) return 'right'
-
-    // Center area (60% x 60%) is for REORDERING
-    // Left half of center vs right half of center
-    return xPercent < 0.5 ? 'left' : 'right'
-  }
-
-  // Handle drag start
-  const handleDragStart = (event: DragStartEvent) => {
-    setDraggedTerminalId(event.active.id as string)
-  }
-
-  // Handle drag over - update drop zone visual
-  const handleDragOver = (event: DragOverEvent) => {
-    const { over } = event
-
-    if (!over || !draggedTerminalId) {
-      setDropZoneState(null)
-      return
-    }
-
-    // Don't show drop zone when dragging over self
-    if (over.id === draggedTerminalId) {
-      setDropZoneState(null)
-      return
-    }
-
-    // PREVENT MERGE INTO EXISTING SPLITS: Block edge zones if target has splits
-    const targetTerminal = storedTerminals.find(t => t.id === over.id)
-    if (targetTerminal?.splitLayout && targetTerminal.splitLayout.type !== 'single') {
-      const zone = detectDropZone(over.id as string)
-      // Check if detected zone is in an edge (trying to split)
-      const tabElement = document.querySelector(`[data-tab-id="${over.id}"]`)
-      if (tabElement) {
-        const rect = tabElement.getBoundingClientRect()
-        const xPercent = (mousePosition.current.x - rect.left) / rect.width
-        const yPercent = (mousePosition.current.y - rect.top) / rect.height
-        const edgeThreshold = 0.20
-
-        const isEdgeZone =
-          yPercent < edgeThreshold ||
-          yPercent > 1 - edgeThreshold ||
-          xPercent < edgeThreshold ||
-          xPercent > 1 - edgeThreshold
-
-        if (isEdgeZone) {
-          // In edge zone - don't allow (block split into split tab)
-          // Force to center-left (default reorder position)
-          setDropZoneState({ terminalId: over.id as string, zone: 'left' })
-          return
-        }
-      }
-    }
-
-    const zone = detectDropZone(over.id as string)
-    setDropZoneState({ terminalId: over.id as string, zone })
-  }
-
-  // Handle merge - create split layout
-  const handleMerge = (sourceTabId: string, targetTabId: string, dropZone: DropZone) => {
-    if (!dropZone || dropZone === 'center') {
-      console.error('[SimpleTerminalApp] Invalid drop zone for merge:', dropZone)
-      return
-    }
-
-    // PREVENT MERGE INTO EXISTING SPLITS: Check if target already has splits
-    const targetTerminal = storedTerminals.find(t => t.id === targetTabId)
-    if (targetTerminal?.splitLayout && targetTerminal.splitLayout.type !== 'single') {
-      console.warn('[SimpleTerminalApp] Cannot merge into tab that already has splits:', targetTabId)
-      console.log('[SimpleTerminalApp] 💡 Tip: Pop out panes to new tabs first, or drag to reorder tabs instead')
-      return
-    }
-
-    const splitType = (dropZone === 'left' || dropZone === 'right') ? 'vertical' : 'horizontal'
-
-    console.log(`[SimpleTerminalApp] Merging ${sourceTabId} into ${targetTabId} (${dropZone} → ${splitType} split)`)
-
-    // Determine pane positions based on drop zone
-    const sourcePosition = dropZone // Source goes where we dropped (left/right/top/bottom)
-    const targetPosition =
-      dropZone === 'left' ? 'right' :
-      dropZone === 'right' ? 'left' :
-      dropZone === 'top' ? 'bottom' : 'top'
-
-    // Update target tab to have split layout
-    updateTerminal(targetTabId, {
-      splitLayout: {
-        type: splitType,
-        panes: [
-          {
-            id: `pane-${Date.now()}-1`,
-            terminalId: targetTabId,
-            size: 50,
-            position: targetPosition,
-          },
-          {
-            id: `pane-${Date.now()}-2`,
-            terminalId: sourceTabId,
-            size: 50,
-            position: sourcePosition,
-          },
-        ],
-      },
-    })
-
-    // Mark source terminal as hidden (part of split, don't show in tab bar)
-    // DON'T remove it - the split layout needs it to exist!
-    updateTerminal(sourceTabId, {
-      isHidden: true,
-    })
-
-    setActiveTerminal(targetTabId)
-    // Focus the newly merged terminal
-    setFocusedTerminal(sourceTabId)
-
-    console.log(`[SimpleTerminalApp] ✅ Created ${splitType} split: ${targetTabId} (${targetPosition}) + ${sourceTabId} (${sourcePosition})`)
-  }
-
-  // Handle drag end - reorder tabs or merge
-  const handleDragEnd = (event: DragEndEvent) => {
-    const { active, over } = event
-
-    // Save current drop zone state before clearing
-    const currentDropZone = dropZoneState
-
-    // Clear drag state
-    setDraggedTerminalId(null)
-    setDropZoneState(null)
-
-    if (!over || active.id === over.id) {
-      return
-    }
-
-    // NEW MODEL: All 4 edges = split, center (left/right halves) = reorder
-    if (currentDropZone && currentDropZone.zone) {
-      // Check if this is an edge zone (split) or center zone (reorder)
-      const targetElement = document.querySelector(`[data-tab-id="${over.id}"]`)
-      if (targetElement) {
-        const rect = targetElement.getBoundingClientRect()
-        const mouseX = mousePosition.current.x
-        const mouseY = mousePosition.current.y
-        const xPercent = (mouseX - rect.left) / rect.width
-        const yPercent = (mouseY - rect.top) / rect.height
-        const edgeThreshold = 0.20
-
-        // Determine if we're in an edge zone or center zone
-        const isEdgeZone =
-          yPercent < edgeThreshold ||
-          yPercent > 1 - edgeThreshold ||
-          xPercent < edgeThreshold ||
-          xPercent > 1 - edgeThreshold
-
-        if (isEdgeZone) {
-          // Edge zone = create split
-          handleMerge(active.id as string, over.id as string, currentDropZone.zone)
-          return
-        } else {
-          // Center zone = reorder tabs
-          const oldIndex = visibleTerminals.findIndex(t => t.id === active.id)
-          const newIndex = visibleTerminals.findIndex(t => t.id === over.id)
-
-          if (oldIndex !== -1 && newIndex !== -1) {
-            // If dropping on right half of center, insert AFTER the target
-            const insertIndex = currentDropZone.zone === 'right' ? newIndex + 1 : newIndex
-
-            // Create new order
-            const reordered = [...visibleTerminals]
-            const [removed] = reordered.splice(oldIndex, 1)
-            // Adjust insert index if we removed an item before it
-            const adjustedInsertIndex = oldIndex < insertIndex ? insertIndex - 1 : insertIndex
-            reordered.splice(adjustedInsertIndex, 0, removed)
-
-            // Preserve hidden terminals
-            const hiddenTerminals = storedTerminals.filter(t => t.isHidden)
-            const newOrder = [...reordered, ...hiddenTerminals]
-            reorderTerminals(newOrder)
-            console.log(`[SimpleTerminalApp] Reordered tabs: ${active.id} moved from ${oldIndex} to ${adjustedInsertIndex}`)
-          }
-          return
-        }
       }
     }
   }
