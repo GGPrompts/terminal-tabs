@@ -117,7 +117,7 @@ export function useTerminalSpawning(
         workingDir: option.workingDir || '~',
         theme: option.defaultTheme,
         transparency: option.defaultTransparency,
-        size: { width: 800, height: 600 },
+        // No initial size - FitAddon will calculate based on container dimensions
         useTmux,  // Pass tmux setting from store
         sessionName,  // Short session name like "tt-cc-1"
         resumable: useTmux,  // CRITICAL: Make sessions persistent when using tmux!
@@ -212,7 +212,7 @@ export function useTerminalSpawning(
         transparency: terminal.transparency ?? option.defaultTransparency,
         fontSize: terminal.fontSize ?? option.defaultFontSize ?? useSettingsStore.getState().terminalDefaultFontSize,
         fontFamily: terminal.fontFamily ?? option.defaultFontFamily ?? useSettingsStore.getState().terminalDefaultFontFamily ?? 'monospace',
-        size: { width: 800, height: 600 },
+        // No initial size - FitAddon will calculate based on container dimensions
         useTmux: true, // Must be true for reconnection
         sessionName: terminal.sessionName, // CRITICAL: Use existing session name!
         resumable: true, // CRITICAL: Must be resumable for persistence!
