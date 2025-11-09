@@ -379,60 +379,50 @@ export const Terminal = React.forwardRef<any, TerminalProps>(
       fitAddonRef.current = fitAddon;
 
       // Delay initial fit and send dimensions to backend
-      // Using longer delay to ensure terminal is fully initialized for proper mouse support and scrollback
-      setTimeout(() => {
+      // CRITICAL: Use multiple retries with increasing delays to ensure container has dimensions
+      const attemptFit = (retryCount = 0) => {
         try {
-          // Ensure terminal is opened before fitting
-          if (!xtermRef.current || !fitAddonRef.current) {
-            // Only log in development, this is normal during initialization
-            if (import.meta.env.DEV) {
-              console.debug('[Terminal] Terminal still initializing, will retry fit');
+          if (!xtermRef.current || !fitAddonRef.current || !terminalRef.current) {
+            if (retryCount < 5) {
+              setTimeout(() => attemptFit(retryCount + 1), 200);
             }
-            // Retry after a short delay
-            setTimeout(() => {
-              if (xtermRef.current && fitAddonRef.current && terminalRef.current?.parentElement) {
-                const containerWidth = terminalRef.current.parentElement.clientWidth;
-                const containerHeight = terminalRef.current.parentElement.clientHeight;
-                if (containerWidth > 0 && containerHeight > 0) {
-                  fitAddonRef.current.fit();
-                }
-              }
-            }, 500);
             return;
           }
-          // Calculate dimensions manually to ensure proper fit
-          if (terminalRef.current && terminalRef.current.parentElement) {
-            const containerWidth =
-              terminalRef.current.parentElement.clientWidth;
-            const containerHeight =
-              terminalRef.current.parentElement.clientHeight;
 
-            // Ensure container has valid dimensions before fitting
-            if (containerWidth > 0 && containerHeight > 0) {
-              fitAddon.fit();
+          // Call fit() which will calculate cols/rows from container dimensions
+          fitAddon.fit();
 
-              // Send initial dimensions to backend
-              if (
-                wsRef.current &&
-                wsRef.current.readyState === WebSocket.OPEN
-              ) {
-                wsRef.current.send(
-                  JSON.stringify({
-                    type: "resize",
-                    terminalId: agent.id,
-                    cols: xterm.cols,
-                    rows: xterm.rows,
-                  }),
-                );
-              }
-            }
+          console.log(`[Terminal] Initial fit attempt ${retryCount + 1}: ${xterm.cols}x${xterm.rows}`);
+
+          // Send initial dimensions to backend
+          if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+            wsRef.current.send(
+              JSON.stringify({
+                type: "resize",
+                terminalId: agent.id,
+                cols: xterm.cols,
+                rows: xterm.rows,
+              }),
+            );
+          }
+
+          // If cols/rows are still at defaults (80x30 or close), retry
+          if ((xterm.cols === 80 || xterm.cols < 100) && retryCount < 5) {
+            console.log(`[Terminal] Cols still small (${xterm.cols}), retrying fit...`);
+            setTimeout(() => attemptFit(retryCount + 1), 300);
           }
         } catch (err) {
           if (import.meta.env.DEV) {
-            console.debug('[Terminal] Initial fit error (normal during initialization):', err);
+            console.debug('[Terminal] Fit error, will retry:', err);
+          }
+          if (retryCount < 5) {
+            setTimeout(() => attemptFit(retryCount + 1), 200);
           }
         }
-      }, 800); // Consistent delay for proper terminal initialization
+      };
+
+      // Start first attempt after initial delay
+      setTimeout(() => attemptFit(0), 500);
 
       // Handle terminal input - send directly to backend via WebSocket
       // NOTE: We attach this immediately, but filter out data during "spawning" status
