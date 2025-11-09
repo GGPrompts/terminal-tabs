@@ -111,6 +111,10 @@ const wss = new WebSocket.Server({ server });
 // Track active WebSocket connections
 const activeConnections = new Set();
 
+// Track which connections own which terminals (for targeted output routing)
+// terminalId -> Set<WebSocket>
+const terminalOwners = new Map();
+
 wss.on('connection', (ws) => {
   log.success('WebSocket client connected');
 
@@ -165,6 +169,13 @@ wss.on('connection', (ws) => {
           if (result.success) {
             // Track this terminal for this connection
             connectionTerminals.add(result.terminal.id);
+
+            // Register this connection as owner of this terminal
+            if (!terminalOwners.has(result.terminal.id)) {
+              terminalOwners.set(result.terminal.id, new Set());
+            }
+            terminalOwners.get(result.terminal.id).add(ws);
+
             log.success('Spawned terminal', {
               id: result.terminal.id,
               name: result.terminal.name,
@@ -207,6 +218,16 @@ wss.on('connection', (ws) => {
           // Power off button: detach from tmux but keep session alive
           log.info(`Detaching from terminal ${data.terminalId.slice(-8)} (preserving tmux session)`);
           connectionTerminals.delete(data.terminalId);
+
+          // Remove this connection from terminal owners
+          if (terminalOwners.has(data.terminalId)) {
+            terminalOwners.get(data.terminalId).delete(ws);
+            // Clean up empty sets
+            if (terminalOwners.get(data.terminalId).size === 0) {
+              terminalOwners.delete(data.terminalId);
+            }
+          }
+
           await terminalRegistry.closeTerminal(data.terminalId, false); // Don't force - keep tmux session alive
           broadcast({ type: 'terminal-closed', data: { id: data.terminalId } });
           break;
@@ -215,6 +236,16 @@ wss.on('connection', (ws) => {
           // X button: force close and kill tmux session
           log.info(`Force closing terminal ${data.terminalId.slice(-8)} (killing tmux session)`);
           connectionTerminals.delete(data.terminalId);
+
+          // Remove this connection from terminal owners
+          if (terminalOwners.has(data.terminalId)) {
+            terminalOwners.get(data.terminalId).delete(ws);
+            // Clean up empty sets
+            if (terminalOwners.get(data.terminalId).size === 0) {
+              terminalOwners.delete(data.terminalId);
+            }
+          }
+
           await terminalRegistry.closeTerminal(data.terminalId, true); // Force close - kill tmux session
           broadcast({ type: 'terminal-closed', data: { id: data.terminalId } });
           break;
@@ -267,6 +298,13 @@ wss.on('connection', (ws) => {
           if (reconnected) {
             // Add to this connection's terminal set
             connectionTerminals.add(terminalId);
+
+            // Register this connection as owner of this terminal
+            if (!terminalOwners.has(terminalId)) {
+              terminalOwners.set(terminalId, new Set());
+            }
+            terminalOwners.get(terminalId).add(ws);
+
             console.log(`[WS] Successfully reconnected to terminal ${terminalId}`);
             ws.send(JSON.stringify({ type: 'terminal-reconnected', data: reconnected }));
           } else {
@@ -325,6 +363,15 @@ wss.on('connection', (ws) => {
     // Disconnect terminals belonging to this connection (with grace period)
     for (const terminalId of connectionTerminals) {
       terminalRegistry.disconnectTerminal(terminalId);
+
+      // Remove this connection from terminal owners
+      if (terminalOwners.has(terminalId)) {
+        terminalOwners.get(terminalId).delete(ws);
+        // Clean up empty sets
+        if (terminalOwners.get(terminalId).size === 0) {
+          terminalOwners.delete(terminalId);
+        }
+      }
     }
     // Clear terminal references to free memory
     connectionTerminals.clear();
@@ -370,11 +417,29 @@ function broadcast(message) {
 // Terminal output streaming - remove any existing listeners first
 terminalRegistry.removeAllListeners('output');
 terminalRegistry.on('output', (terminalId, data) => {
-  broadcast({
-    type: 'terminal-output',
-    terminalId,
-    data
-  });
+  // CRITICAL: Only send output to connections that own this terminal
+  // This prevents cross-window contamination and escape sequence corruption
+  const owners = terminalOwners.get(terminalId);
+  if (owners && owners.size > 0) {
+    const message = JSON.stringify({
+      type: 'terminal-output',
+      terminalId,
+      data
+    });
+
+    owners.forEach(client => {
+      if (client.readyState === WebSocket.OPEN) {
+        try {
+          client.send(message);
+        } catch (error) {
+          log.error('Error sending terminal output to client:', error);
+          // Remove dead connection from owners
+          owners.delete(client);
+          activeConnections.delete(client);
+        }
+      }
+    });
+  }
 });
 
 // Listen for terminal lifecycle close events (natural exit) and broadcast to clients

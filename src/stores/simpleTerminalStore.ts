@@ -60,10 +60,15 @@ export const useSimpleTerminalStore = create<SimpleTerminalState>()(
       focusedTerminalId: null,
 
       addTerminal: (terminal) =>
-        set((state) => ({
-          terminals: [...state.terminals, terminal],
-          activeTerminalId: terminal.id,
-        })),
+        set((state) => {
+          // Only set as active if we don't have an active terminal yet
+          // This prevents cross-window interference when spawning from other windows
+          const shouldSetActive = !state.activeTerminalId
+          return {
+            terminals: [...state.terminals, terminal],
+            activeTerminalId: shouldSetActive ? terminal.id : state.activeTerminalId,
+          }
+        }),
 
       removeTerminal: (id) =>
         set((state) => {

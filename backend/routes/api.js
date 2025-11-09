@@ -694,6 +694,45 @@ router.delete('/tmux/sessions/:name', asyncHandler(async (req, res) => {
 }));
 
 /**
+ * POST /api/tmux/detach/:name - Detach from a tmux session (keep session alive)
+ * Used when moving terminals between browser windows
+ */
+router.post('/tmux/detach/:name', asyncHandler(async (req, res) => {
+  const { name } = req.params;
+  const { execSync } = require('child_process');
+
+  try {
+    // Check if session exists
+    try {
+      execSync(`tmux has-session -t "${name}" 2>/dev/null`);
+    } catch {
+      return res.status(404).json({
+        success: false,
+        error: `Session ${name} not found`
+      });
+    }
+
+    // Detach all clients from this session (non-destructive)
+    // This doesn't kill the session, just detaches clients
+    execSync(`tmux detach-client -s "${name}" 2>/dev/null || true`);
+
+    log.info(`Detached from tmux session: ${name}`);
+
+    res.json({
+      success: true,
+      message: `Detached from session ${name}`,
+      session: name
+    });
+  } catch (err) {
+    log.error(`Failed to detach from tmux session ${name}:`, err.message);
+    res.status(500).json({
+      success: false,
+      error: err.message
+    });
+  }
+}));
+
+/**
  * POST /api/tmux/cleanup - Kill all tmux sessions matching a pattern
  * WARNING: This is destructive and cannot be undone
  */

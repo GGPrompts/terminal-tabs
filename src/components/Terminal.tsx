@@ -267,20 +267,25 @@ export const Terminal = React.forwardRef<any, TerminalProps>(
       });
 
       // Ensure element exists and has dimensions before opening
-      if (terminalRef.current && terminalRef.current.offsetWidth > 0 && terminalRef.current.offsetHeight > 0) {
-        xterm.open(terminalRef.current);
-      } else {
-        // Try again after a short delay if element isn't ready
-        const retryOpen = () => {
-          if (terminalRef.current && terminalRef.current.offsetWidth > 0 && terminalRef.current.offsetHeight > 0) {
-            xterm.open(terminalRef.current);
-          } else {
-            // Give up after a few retries
-            console.warn('[Terminal] Element not ready for xterm.open after retries');
-          }
-        };
-        setTimeout(retryOpen, 100);
-      }
+      // Bounded retry logic for popout windows where element may have 0x0 dimensions initially
+      let retryCount = 0;
+      const MAX_RETRIES = 10;
+      const RETRY_DELAY = 50;
+
+      const attemptOpen = () => {
+        if (terminalRef.current && terminalRef.current.offsetWidth > 0 && terminalRef.current.offsetHeight > 0) {
+          xterm.open(terminalRef.current);
+          console.log(`[Terminal] xterm opened successfully for ${agent.name} (attempt ${retryCount + 1})`);
+        } else if (retryCount < MAX_RETRIES) {
+          retryCount++;
+          console.log(`[Terminal] Element not ready (0x0 dimensions), retrying... (${retryCount}/${MAX_RETRIES})`);
+          setTimeout(attemptOpen, RETRY_DELAY);
+        } else {
+          console.error(`[Terminal] ✗ Failed to open xterm after ${MAX_RETRIES} attempts - element has 0x0 dimensions`);
+        }
+      };
+
+      attemptOpen();
 
       // Disable Windows autofill/autocomplete/password manager on the xterm helper textarea
       setTimeout(() => {

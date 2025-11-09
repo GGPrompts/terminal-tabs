@@ -359,6 +359,41 @@ function SimpleTerminalApp() {
     }
   }, []);
 
+  // Check for ?active=xxx parameter to set initial active terminal (for popout windows)
+  // CRITICAL: Watch full storedTerminals array, not just length, to catch windowId changes
+  const activeFromUrlRef = useRef<string | null>(null)
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search)
+    const activeFromUrl = urlParams.get('active')
+
+    // Only process if we have a URL param and haven't processed it yet
+    if (!activeFromUrl || activeFromUrlRef.current === activeFromUrl) {
+      return
+    }
+
+    console.log(`[SimpleTerminalApp] Setting active terminal from URL: ${activeFromUrl}`)
+
+    // Find this terminal in our stored terminals
+    const terminal = storedTerminals.find(t => t.id === activeFromUrl)
+    if (terminal) {
+      // Check if it belongs to this window
+      const terminalWindow = terminal.windowId || 'main'
+      if (terminalWindow === currentWindowId) {
+        setActiveTerminal(activeFromUrl)
+        activeFromUrlRef.current = activeFromUrl
+        // Clean up URL parameter
+        const newUrl = new URL(window.location.href)
+        newUrl.searchParams.delete('active')
+        window.history.replaceState({}, '', newUrl)
+        console.log(`[SimpleTerminalApp] ✓ Activated terminal: ${terminal.name}`)
+      } else {
+        console.warn(`[SimpleTerminalApp] Terminal ${activeFromUrl} belongs to different window: ${terminalWindow}, current: ${currentWindowId}`)
+      }
+    } else {
+      console.warn(`[SimpleTerminalApp] Terminal ${activeFromUrl} not found yet, waiting for localStorage sync...`)
+    }
+  }, [storedTerminals, currentWindowId]) // Re-run when terminals change (not just length!)
+
   // Track mouse position for drop zone detection
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
@@ -683,23 +718,6 @@ function SimpleTerminalApp() {
           if (processedAgentIds.current.has(message.data.id)) {
             return
           }
-          processedAgentIds.current.add(message.data.id)
-
-          setWebSocketAgents(prev => {
-            const existingIndex = prev.findIndex(a => a.id === message.data.id)
-            if (existingIndex !== -1) {
-              const updated = [...prev]
-              updated[existingIndex] = {
-                ...message.data,
-                status: message.data.state || message.data.status || 'active',
-              }
-              return updated
-            }
-            return [...prev, {
-              ...message.data,
-              status: message.data.state || message.data.status || 'active',
-            }]
-          })
 
           // Debug: Show all stored terminals and what we're looking for
           console.log('[SimpleTerminalApp] Looking for requestId:', message.requestId)
@@ -707,7 +725,8 @@ function SimpleTerminalApp() {
             id: t.id,
             requestId: t.requestId,
             status: t.status,
-            type: t.terminalType
+            type: t.terminalType,
+            windowId: t.windowId
           })))
           console.log('[SimpleTerminalApp] Pending spawns:', Array.from(pendingSpawns.current.keys()))
 
@@ -735,8 +754,35 @@ function SimpleTerminalApp() {
             console.log('[SimpleTerminalApp] Found by type?', !!existingTerminal)
           }
 
+          // CRITICAL: Only update terminals that belong to THIS window
+          // Check this BEFORE adding to webSocketAgents to prevent cross-window contamination
           if (existingTerminal) {
+            const terminalWindow = existingTerminal.windowId || 'main'
+            if (terminalWindow !== currentWindowId) {
+              console.log('[SimpleTerminalApp] ⏭️ Ignoring terminal-spawned for different window:', existingTerminal.id, 'belongs to:', terminalWindow, 'current:', currentWindowId)
+              return
+            }
+
             console.log('[SimpleTerminalApp] ✅ Matched terminal:', existingTerminal.id, 'requestId:', message.requestId)
+
+            // Now that we've verified it belongs to THIS window, add to webSocketAgents
+            processedAgentIds.current.add(message.data.id)
+
+            setWebSocketAgents(prev => {
+              const existingIndex = prev.findIndex(a => a.id === message.data.id)
+              if (existingIndex !== -1) {
+                const updated = [...prev]
+                updated[existingIndex] = {
+                  ...message.data,
+                  status: message.data.state || message.data.status || 'active',
+                }
+                return updated
+              }
+              return [...prev, {
+                ...message.data,
+                status: message.data.state || message.data.status || 'active',
+              }]
+            })
 
             // Log if this is a split-related terminal
             if (existingTerminal.splitLayout && existingTerminal.splitLayout.type !== 'single') {
@@ -764,21 +810,12 @@ function SimpleTerminalApp() {
               windowId: existingTerminal.windowId, // CRITICAL: Preserve window assignment
             })
           } else {
-            // This should rarely happen now that we match by requestId
-            console.warn('[SimpleTerminalApp] No matching terminal found for requestId:', message.requestId)
-            const option = spawnOptions.find(opt => opt.terminalType === message.data.terminalType)
-            const newTerminal: StoredTerminal = {
-              id: `terminal-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-              name: message.data.name || message.data.terminalType,
-              terminalType: message.data.terminalType,
-              icon: option?.icon,
-              agentId: message.data.id,
-              workingDir: message.data.workingDir,
-              sessionName: message.data.sessionName,
-              createdAt: Date.now(),
-              status: 'active',
-            }
-            addTerminal(newTerminal)
+            // CRITICAL: Do NOT create a new terminal for unmatched spawns
+            // This prevents cross-window contamination where Window 1 adopts terminals spawned in Window 2
+            console.warn('[SimpleTerminalApp] ⏭️ Ignoring terminal-spawned - no matching terminal in this window for requestId:', message.requestId, 'agentId:', message.data.id)
+            console.log('[SimpleTerminalApp] This terminal belongs to a different window or was spawned outside this session')
+            // Early return - do not add to webSocketAgents, do not create a terminal
+            return
           }
         }
         break
@@ -981,6 +1018,9 @@ function SimpleTerminalApp() {
       addTerminal(newTerminal)
       console.log('[SimpleTerminalApp] Created placeholder terminal with requestId:', requestId, 'sessionName:', sessionName)
 
+      // Explicitly set as active in THIS window (addTerminal no longer does this automatically)
+      setActiveTerminal(newTerminal.id)
+
       // Build config
       const config: any = {
         terminalType: option.terminalType,
@@ -1110,33 +1150,118 @@ function SimpleTerminalApp() {
   }
 
   // Move tab to new window (or existing window if specified)
-  const handlePopOutTab = (terminalId: string, targetWindowId?: string) => {
+  const handlePopOutTab = async (terminalId: string, targetWindowId?: string) => {
     const terminal = storedTerminals.find(t => t.id === terminalId)
     if (!terminal) return
 
     // Generate new window ID if not specified
     const newWindowId = targetWindowId || `window-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
 
-    console.log(`[SimpleTerminalApp] Moving ${terminal.name} to new window: ${newWindowId}`)
+    console.log(`[SimpleTerminalApp] Popping out ${terminal.name} to window: ${newWindowId}`)
 
-    // Move terminal to new window
-    updateTerminal(terminalId, { windowId: newWindowId })
-
-    // If this is a split terminal, also move the pane terminals
+    // Collect all session names to detach (terminal + split panes)
+    const sessionsToDetach: string[] = []
+    if (terminal.sessionName) {
+      sessionsToDetach.push(terminal.sessionName)
+    }
     if (terminal.splitLayout && terminal.splitLayout.panes.length > 0) {
       terminal.splitLayout.panes.forEach(pane => {
-        updateTerminal(pane.terminalId, { windowId: newWindowId })
+        const paneTerminal = storedTerminals.find(t => t.id === pane.terminalId)
+        if (paneTerminal?.sessionName) {
+          sessionsToDetach.push(paneTerminal.sessionName)
+        }
       })
     }
 
-    // Set as active terminal for state persistence (new window will read this)
-    setActiveTerminal(terminalId)
+    // Step 1: Update state - move to new window and clear agent IDs
+    console.log(`[SimpleTerminalApp] Step 1: Updating state (windowId=${newWindowId}, detaching ${sessionsToDetach.length} sessions)`)
+    updateTerminal(terminalId, {
+      agentId: undefined,
+      status: 'spawning',
+      windowId: newWindowId,
+    })
 
-    // Delay to ensure localStorage sync, then open new window
+    // Update split panes
+    if (terminal.splitLayout && terminal.splitLayout.panes.length > 0) {
+      terminal.splitLayout.panes.forEach(pane => {
+        updateTerminal(pane.terminalId, {
+          agentId: undefined,
+          status: 'spawning',
+          windowId: newWindowId,
+        })
+      })
+    }
+
+    // Step 2: Switch away from this terminal in current window
+    if (activeTerminalId === terminalId) {
+      const remainingTerminals = visibleTerminals.filter(t =>
+        t.id !== terminalId &&
+        (t.windowId || 'main') === currentWindowId
+      )
+      if (remainingTerminals.length > 0) {
+        setActiveTerminal(remainingTerminals[0].id)
+        console.log(`[SimpleTerminalApp] Step 2: Switched to ${remainingTerminals[0].name}`)
+      } else {
+        setActiveTerminal(null)
+        console.log(`[SimpleTerminalApp] Step 2: No remaining terminals, cleared active`)
+      }
+    }
+
+    // Step 3: Detach from tmux sessions using API (for tmux terminals)
+    if (sessionsToDetach.length > 0 && useTmux) {
+      console.log(`[SimpleTerminalApp] Step 3: Detaching from ${sessionsToDetach.length} tmux sessions via API`)
+      // Detach from all sessions concurrently
+      await Promise.all(
+        sessionsToDetach.map(async (sessionName) => {
+          try {
+            const response = await fetch(`/api/tmux/detach/${sessionName}`, {
+              method: 'POST',
+            })
+            const result = await response.json()
+            if (result.success) {
+              console.log(`[SimpleTerminalApp] ✓ Detached from tmux session: ${sessionName}`)
+            } else {
+              console.warn(`[SimpleTerminalApp] Failed to detach from ${sessionName}:`, result.error)
+            }
+          } catch (error) {
+            console.error(`[SimpleTerminalApp] Error detaching from ${sessionName}:`, error)
+          }
+        })
+      )
+    } else {
+      // For non-tmux terminals, send WebSocket detach
+      const agentsToDetach: string[] = []
+      if (terminal.agentId) agentsToDetach.push(terminal.agentId)
+      if (terminal.splitLayout && terminal.splitLayout.panes.length > 0) {
+        terminal.splitLayout.panes.forEach(pane => {
+          const paneTerminal = storedTerminals.find(t => t.id === pane.terminalId)
+          if (paneTerminal?.agentId) agentsToDetach.push(paneTerminal.agentId)
+        })
+      }
+
+      if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN && agentsToDetach.length > 0) {
+        console.log(`[SimpleTerminalApp] Step 3: Sending ${agentsToDetach.length} WebSocket detach messages`)
+        agentsToDetach.forEach(agentId => {
+          wsRef.current!.send(JSON.stringify({
+            type: 'detach',
+            terminalId: agentId,
+          }))
+        })
+      }
+    }
+
+    // Step 4: Wait for state to sync and detaches to process, then open new window
+    // New window will see updated windowId in localStorage and reconnect automatically
     setTimeout(() => {
-      const url = `${window.location.origin}${window.location.pathname}?window=${newWindowId}`
-      window.open(url, `tabz-${newWindowId}`)
-    }, 250)
+      console.log(`[SimpleTerminalApp] Step 4: Opening new window`)
+      // Pass both windowId AND the terminalId to activate in the new window
+      const url = `${window.location.origin}${window.location.pathname}?window=${newWindowId}&active=${terminalId}`
+      const newWin = window.open(url, `tabz-${newWindowId}`)
+
+      if (!newWin) {
+        console.error('[SimpleTerminalApp] Failed to open new window (popup blocked?)')
+      }
+    }, 400) // Shorter delay since tmux detach is synchronous
   }
 
   // Expose handlePopOutTab to window for SortableTab to use
