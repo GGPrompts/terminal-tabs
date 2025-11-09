@@ -1,6 +1,6 @@
-# Terminal Tabs
+# Tabz
 
-A simple, lightweight tab-based terminal interface built with React, TypeScript, and xterm.js. Spawn multiple terminals in browser tabs with full terminal emulation powered by a Node.js backend.
+**Tab>_** - A simple, lightweight tab-based terminal interface built with React, TypeScript, and xterm.js. Spawn multiple terminals in browser tabs with full terminal emulation powered by a Node.js backend.
 
 ## Features
 
@@ -57,7 +57,7 @@ Terminal types are configured in `public/spawn-options.json`. Each terminal can 
 ## Project Structure
 
 ```
-terminal-tabs/
+tabz/
 ├── src/
 │   ├── SimpleTerminalApp.tsx      # Main app component
 │   ├── components/

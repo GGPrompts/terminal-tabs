@@ -1,5 +1,5 @@
 /**
- * Opustrator - Simplified Backend
+ * Tabz - Simplified Backend
  * 
  * Core principles:
  * - Single source of truth for terminal state (terminalRegistry)
@@ -19,7 +19,6 @@ const { createModuleLogger } = require('./modules/logger');
 // Core modules
 const terminalRegistry = require('./modules/terminal-registry');
 const unifiedSpawn = require('./modules/unified-spawn');
-const layoutManager = require('./modules/layout-manager');
 const TUIToolsManager = require('./modules/tui-tools');
 const ptyHandler = require('./modules/pty-handler');
 // Removed terminal-recovery.js - was causing duplicate terminals and conflicts

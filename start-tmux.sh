@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Terminal Tabs - Tmux Launch Script
+# Tabz - Tmux Launch Script
 # Starts both backend and frontend in a tmux session
 
 set -e
@@ -17,10 +17,10 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BACKEND_DIR="$SCRIPT_DIR/backend"
 FRONTEND_DIR="$SCRIPT_DIR"
 
-SESSION_NAME="terminal-tabs"
+SESSION_NAME="tabz"
 
 echo -e "${BLUE}╔════════════════════════════════════════╗${NC}"
-echo -e "${BLUE}║  Terminal Tabs Tmux Launch Script     ║${NC}"
+echo -e "${BLUE}║  Tabz Tmux Launch Script              ║${NC}"
 echo -e "${BLUE}╚════════════════════════════════════════╝${NC}"
 echo ""
 
@@ -69,7 +69,7 @@ tmux send-keys -t $SESSION_NAME:logs "echo 'Logs window - use Ctrl+C to refresh'
 # Select the frontend window
 tmux select-window -t $SESSION_NAME:frontend
 
-echo -e "${GREEN}✅ Terminal Tabs started in tmux session!${NC}"
+echo -e "${GREEN}✅ Tabz started in tmux session!${NC}"
 echo ""
 echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
 echo -e "${BLUE}Tmux Commands:${NC}"

@@ -1,7 +1,7 @@
 {
-  "name": "terminal-tabs",
+  "name": "tabz",
   "version": "1.0.0",
-  "description": "Simple tab-based terminal interface",
+  "description": "Tabz - Lightweight, tab-based terminal interface",
   "type": "module",
   "scripts": {
     "dev": "vite",

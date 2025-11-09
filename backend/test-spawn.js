@@ -6,7 +6,7 @@ const terminalRegistry = require('./modules/terminal-registry');
 const unifiedSpawn = require('./modules/unified-spawn');
 
 async function testSpawn() {
-  console.log('=== Opustrator v3 Spawn Test ===');
+  console.log('=== Tabz Spawn Test ===');
 
   try {
     // Test 1: Spawn a bash terminal (PTY)
@@ -59,7 +59,7 @@ async function testSpawn() {
     // Test 4: Send a command
     console.log('\n4. Testing command sending...');
     if (bashResult.success) {
-      terminalRegistry.sendCommand(bashResult.terminal.id, 'echo "Hello from Opustrator v3"\n');
+      terminalRegistry.sendCommand(bashResult.terminal.id, 'echo "Hello from Tabz"\n');
       console.log('✅ Command sent to bash terminal');
     }
 

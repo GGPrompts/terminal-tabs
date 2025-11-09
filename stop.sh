@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Terminal Tabs - Stop Script
+# Tabz - Stop Script
 # Stops both backend and frontend servers
 
 # Colors for output
@@ -12,7 +12,7 @@ NC='\033[0m' # No Color
 # Get the directory where this script is located
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-echo -e "${YELLOW}🛑 Stopping Terminal Tabs...${NC}"
+echo -e "${YELLOW}🛑 Stopping Tabz...${NC}"
 echo ""
 
 # Stop backend
@@ -64,4 +64,4 @@ if [ ! -z "$FRONTEND_PORT_PID" ]; then
 fi
 
 echo ""
-echo -e "${GREEN}✅ Terminal Tabs stopped successfully!${NC}"
+echo -e "${GREEN}✅ Tabz stopped successfully!${NC}"

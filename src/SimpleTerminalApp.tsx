@@ -750,8 +750,8 @@ function SimpleTerminalApp() {
     // Clear all terminals from store (will also clear localStorage via persist)
     clearAllTerminals()
 
-    // Clear global settings including cached font size (opustrator-settings)
-    localStorage.removeItem('opustrator-settings')
+    // Clear global settings including cached font size (tabz-settings)
+    localStorage.removeItem('tabz-settings')
 
     console.log('[SimpleTerminalApp] ✅ All sessions and settings cleared')
 

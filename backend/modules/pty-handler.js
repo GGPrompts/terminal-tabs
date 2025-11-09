@@ -1,5 +1,5 @@
 /**
- * PTY Handler - Simplified PTY management for Opustrator v3
+ * PTY Handler - Simplified PTY management for Tabz
  * 
  * Simplified from Claude Orchestrator v2's complex PTY architecture
  * - Direct node-pty integration without layers of abstraction
@@ -107,11 +107,11 @@ class PTYHandler extends EventEmitter {
       LINES: rows.toString(),
       AGENT_NAME: name,
       TERMINAL_TYPE: terminalType,
-      // Opustrator process identification
-      OPUSTRATOR_PROCESS: 'true',
-      OPUSTRATOR_TYPE: terminalType,
-      OPUSTRATOR_NAME: name,
-      OPUSTRATOR_ID: id,
+      // Tabz process identification
+      TABZ_PROCESS: 'true',
+      TABZ_TYPE: terminalType,
+      TABZ_NAME: name,
+      TABZ_ID: id,
       // Disable automatic IDE connection for Claude Code
       CLAUDE_CODE_AUTO_CONNECT_IDE: 'false',
       // Enable mouse support for applications like MC

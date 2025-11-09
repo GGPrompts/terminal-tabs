@@ -31,9 +31,8 @@ class AppErrorBoundary extends Component<Props, State> {
   handleReset = () => {
     // Clear localStorage if it's corrupted
     try {
-      localStorage.removeItem('opustrator-canvas-storage');
-      localStorage.removeItem('opustrator-settings');
-      localStorage.removeItem('opustrator-ui');
+      localStorage.removeItem('tabz-settings');
+      localStorage.removeItem('simple-terminal-storage');
     } catch (e) {
       console.error('Failed to clear localStorage:', e);
     }
@@ -57,7 +56,7 @@ class AppErrorBoundary extends Component<Props, State> {
           fontFamily: 'monospace',
           padding: '20px'
         }}>
-          <h1 style={{ fontSize: '48px', marginBottom: '20px' }}>😵 Opustrator Crashed</h1>
+          <h1 style={{ fontSize: '48px', marginBottom: '20px' }}>😵 Tabz Crashed</h1>
           <p style={{ fontSize: '18px', marginBottom: '30px', opacity: 0.8 }}>
             Something went wrong. This might be due to corrupted state data.
           </p>

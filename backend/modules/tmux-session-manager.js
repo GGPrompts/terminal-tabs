@@ -1,7 +1,7 @@
 /**
  * tmux Session Manager
  *
- * Provides comprehensive tmux session management for Opustrator.
+ * Provides comprehensive tmux session management for Tabz.
  * Inspired by tmuxplexer's architecture, adapted for Node.js backend.
  *
  * Features:
@@ -29,8 +29,8 @@ class TmuxSessionManager {
       'gemini': /gemini/i,
     };
 
-    // Terminal type patterns from Opustrator
-    this.opustratorPatterns = {
+    // Terminal type patterns from Tabz
+    this.tabzPatterns = {
       'tui-tool': /^tui-tool-/,
       'claude-code': /^claude-code-/,
       'opencode': /^opencode-/,
@@ -59,7 +59,7 @@ class TmuxSessionManager {
    * - Working directory & git branch
    * - AI tool detection
    * - Claude Code statusline (if applicable)
-   * - Opustrator managed vs external
+   * - Tabz managed vs external
    */
   async listDetailedSessions() {
     if (!this.isTmuxRunning()) {
@@ -90,13 +90,13 @@ class TmuxSessionManager {
           workingDir: null,
           gitBranch: null,
           aiTool: null,
-          opustratorManaged: false,
+          tabzManaged: false,
           claudeState: null,
           paneCommand: null,
         };
 
         // Detect if Opustrator-managed session
-        session.opustratorManaged = this.isOpustratorSession(name);
+        session.tabzManaged = this.isTabzSession(name);
 
         // Get working directory and current command
         await this.enrichSessionMetadata(session);
@@ -120,10 +120,10 @@ class TmuxSessionManager {
   }
 
   /**
-   * Check if session is managed by Opustrator
+   * Check if session is managed by Tabz
    */
-  isOpustratorSession(sessionName) {
-    for (const pattern of Object.values(this.opustratorPatterns)) {
+  isTabzSession(sessionName) {
+    for (const pattern of Object.values(this.tabzPatterns)) {
       if (pattern.test(sessionName)) {
         return true;
       }
@@ -618,26 +618,26 @@ class TmuxSessionManager {
 
   /**
    * Group sessions by type
-   * Returns { opustrator: [], claudeCode: [], external: [] }
+   * Returns { tabz: [], claudeCode: [], external: [] }
    *
-   * Priority: AI tool type > Opustrator management
+   * Priority: AI tool type > Tabz management
    * This ensures Claude Code sessions appear in "Claude Code Sessions"
-   * regardless of whether they're Opustrator-managed or external.
+   * regardless of whether they're Tabz-managed or external.
    */
   groupSessions(sessions) {
     const groups = {
-      opustrator: [],
+      tabz: [],
       claudeCode: [],
       external: [],
     };
 
     for (const session of sessions) {
-      // Prioritize AI tool detection over Opustrator management
+      // Prioritize AI tool detection over Tabz management
       // This ensures right-click spawned Claude sessions appear in Claude Code group
       if (session.aiTool === 'claude-code') {
         groups.claudeCode.push(session);
-      } else if (session.opustratorManaged) {
-        groups.opustrator.push(session);
+      } else if (session.tabzManaged) {
+        groups.tabz.push(session);
       } else {
         groups.external.push(session);
       }

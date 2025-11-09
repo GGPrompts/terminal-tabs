@@ -1,5 +1,5 @@
 /**
- * Opustrator API Routes - Simplified & Explicit
+ * Tabz API Routes - Simplified & Explicit
  * 
  * Key principles:
  * - Minimal API surface (reduced from 120+ to ~15 endpoints)
@@ -12,7 +12,6 @@ const express = require('express');
 const Joi = require('joi');
 const terminalRegistry = require('../modules/terminal-registry');
 const unifiedSpawn = require('../modules/unified-spawn');
-const layoutManager = require('../modules/layout-manager');
 
 const router = express.Router();
 
@@ -43,20 +42,6 @@ const commandSchema = Joi.object({
 const resizeSchema = Joi.object({
   cols: Joi.number().integer().min(20).max(300).required(),
   rows: Joi.number().integer().min(10).max(100).required()
-});
-
-const saveLayoutSchema = Joi.object({
-  name: Joi.string().required().min(1).max(50).pattern(/^[a-zA-Z0-9_-]+$/),
-  terminals: Joi.array().items(
-    Joi.object({
-      id: Joi.string().required(),
-      terminalType: Joi.string().required(),
-      name: Joi.string().required(),
-      position: Joi.object().optional()
-    })
-  ).required(),
-  arrangement: Joi.string().valid('tabs', 'grid', 'split').default('tabs'),
-  metadata: Joi.object().optional()
 });
 
 // =============================================================================
@@ -400,111 +385,6 @@ router.post('/agents/:id/resize', validateBody(resizeSchema), asyncHandler(async
 }));
 
 // =============================================================================
-// LAYOUT ROUTES
-// =============================================================================
-
-/**
- * GET /api/layouts - Get saved terminal arrangements
- */
-router.get('/layouts', asyncHandler(async (req, res) => {
-  const layouts = await layoutManager.getAllLayouts();
-  
-  res.json({
-    success: true,
-    count: layouts.length,
-    data: layouts
-  });
-}));
-
-/**
- * GET /api/layouts/:name - Get specific layout
- */
-router.get('/layouts/:name', asyncHandler(async (req, res) => {
-  const { name } = req.params;
-  
-  try {
-    const layout = await layoutManager.loadLayout(name);
-    
-    res.json({
-      success: true,
-      data: layout
-    });
-  } catch (error) {
-    if (error.message.includes('not found')) {
-      return res.status(404).json({
-        error: 'Layout not found',
-        message: error.message
-      });
-    }
-    throw error;
-  }
-}));
-
-/**
- * POST /api/layouts - Save current layout
- */
-router.post('/layouts', validateBody(saveLayoutSchema), asyncHandler(async (req, res) => {
-  const layoutData = req.body;
-  
-  // Validate that all terminal IDs exist
-  for (const terminalRef of layoutData.terminals) {
-    const terminal = terminalRegistry.getTerminal(terminalRef.id);
-    if (!terminal) {
-      return res.status(400).json({
-        error: 'Invalid terminal reference',
-        message: `Terminal ${terminalRef.id} does not exist`
-      });
-    }
-  }
-  
-  const savedLayout = await layoutManager.saveLayout(layoutData.name, layoutData);
-  
-  res.status(201).json({
-    success: true,
-    message: `Layout '${layoutData.name}' saved successfully`,
-    data: savedLayout
-  });
-}));
-
-/**
- * PUT /api/layouts/:name - Update existing layout
- */
-router.put('/layouts/:name', validateBody(saveLayoutSchema), asyncHandler(async (req, res) => {
-  const { name } = req.params;
-  const updates = req.body;
-  
-  // Ensure the name matches
-  if (updates.name && updates.name !== name) {
-    return res.status(400).json({
-      error: 'Name mismatch',
-      message: 'Layout name in URL and body must match'
-    });
-  }
-  
-  const updatedLayout = await layoutManager.updateLayout(name, updates);
-  
-  res.json({
-    success: true,
-    message: `Layout '${name}' updated successfully`,
-    data: updatedLayout
-  });
-}));
-
-/**
- * DELETE /api/layouts/:name - Delete layout
- */
-router.delete('/layouts/:name', asyncHandler(async (req, res) => {
-  const { name } = req.params;
-  
-  await layoutManager.deleteLayout(name);
-  
-  res.json({
-    success: true,
-    message: `Layout '${name}' deleted successfully`
-  });
-}));
-
-// =============================================================================
 // UTILITY ROUTES
 // =============================================================================
 
@@ -608,7 +488,7 @@ const tmuxSessionManager = require('../modules/tmux-session-manager');
  * - Working directory & git branch
  * - AI tool detection
  * - Claude Code statusline (if applicable)
- * - Opustrator managed vs external
+ * - Tabz managed vs external
  */
 router.get('/tmux/sessions/detailed', asyncHandler(async (req, res) => {
   const sessions = await tmuxSessionManager.listDetailedSessions();
@@ -621,7 +501,7 @@ router.get('/tmux/sessions/detailed', asyncHandler(async (req, res) => {
       grouped,
       count: sessions.length,
       counts: {
-        opustrator: grouped.opustrator.length,
+        tabz: grouped.tabz.length,
         claudeCode: grouped.claudeCode.length,
         external: grouped.external.length,
       }

@@ -1,8 +1,8 @@
-# CLAUDE.md - Terminal Tabs
+# CLAUDE.md - Tabz
 
 ## 🎯 Project Overview
 
-Terminal Tabs is a **lightweight, tab-based terminal interface** for the web. Built with React, TypeScript, and xterm.js, it provides a simple alternative to complex canvas-based terminal managers.
+Tabz (Tab>_) is a **lightweight, tab-based terminal interface** for the web. Built with React, TypeScript, and xterm.js, it provides a simple alternative to complex canvas-based terminal managers.
 
 **Version**: 1.0.0
 **Status**: MVP Complete
@@ -235,7 +235,7 @@ The backend runs in a tmux session when started with `./start-tmux.sh`. View log
 
 **1. Attach to Backend Session (Live Logs)**
 ```bash
-tmux attach -t terminal-tabs:backend
+tmux attach -t tabz:backend
 # Press Ctrl+B, then D to detach
 ```
 
@@ -248,8 +248,8 @@ tmux attach -t terminal-tabs:backend
 ```bash
 tmux ls
 # Shows all tmux sessions including:
-# - terminal-tabs:backend (backend server)
-# - terminal-tabs:frontend (Vite dev server)
+# - tabz:backend (backend server)
+# - tabz:frontend (Vite dev server)
 # - tt-bash-xyz (spawned bash terminals)
 # - tt-cc-abc (spawned Claude Code terminals)
 ```
@@ -285,7 +285,7 @@ LOG_LEVEL=5  # Shows detailed PTY operations, tmux session info
 ### Common Debugging Scenarios
 
 **1. Terminal won't spawn**
-- Check backend logs: `tmux attach -t terminal-tabs:backend`
+- Check backend logs: `tmux attach -t tabz:backend`
 - Look for spawn errors, working directory validation failures
 - Verify `spawn-options.json` syntax
 
@@ -323,21 +323,21 @@ LOG_LEVEL=5  # Shows detailed PTY operations, tmux session info
 **Claude can capture logs directly** (when you run `./start-tmux.sh`):
 ```bash
 # Claude runs these via Bash tool after making changes:
-tmux capture-pane -t terminal-tabs:backend -p -S -100   # Backend logs
-tmux capture-pane -t terminal-tabs:frontend -p -S -100  # Frontend logs
+tmux capture-pane -t tabz:backend -p -S -100   # Backend logs
+tmux capture-pane -t tabz:frontend -p -S -100  # Frontend logs
 tmux ls | grep "^tt-"                                    # Active terminals
 ```
 
 **User can view logs manually:**
 ```bash
 # Method 1: Attach to backend session
-tmux attach -t terminal-tabs:backend
+tmux attach -t tabz:backend
 
 # Method 2: Spawn "Dev Logs" terminal in app
 # Right-click → Dev Logs
 
 # Method 3: Capture last 50 browser logs
-tmux capture-pane -t terminal-tabs:backend -p -S -50 | grep "\[Browser"
+tmux capture-pane -t tabz:backend -p -S -50 | grep "\[Browser"
 ```
 
 **Format (optimized for Claude Code):**
@@ -357,7 +357,7 @@ tmux capture-pane -t terminal-tabs:backend -p -S -50 | grep "\[Browser"
 
 ## 🔗 Links
 
-- **GitHub**: https://github.com/GGPrompts/terminal-tabs
+- **GitHub**: https://github.com/GGPrompts/tabz
 - **Parent Project**: https://github.com/GGPrompts/opustrator
 - **xterm.js Docs**: https://xtermjs.org/
 
@@ -381,10 +381,10 @@ tmux capture-pane -t terminal-tabs:backend -p -S -50 | grep "\[Browser"
 2. **Check if it's working** (Bash tool):
    ```bash
    # Check backend logs
-   tmux capture-pane -t terminal-tabs:backend -p -S -100
+   tmux capture-pane -t tabz:backend -p -S -100
 
    # Check frontend logs (includes browser console via forwarder)
-   tmux capture-pane -t terminal-tabs:frontend -p -S -100
+   tmux capture-pane -t tabz:frontend -p -S -100
 
    # Check active terminal sessions
    tmux ls | grep "^tt-"
@@ -399,10 +399,10 @@ tmux capture-pane -t terminal-tabs:backend -p -S -50 | grep "\[Browser"
 ```bash
 # After updating Terminal.tsx:
 # 1. Capture backend to see if terminal spawned
-tmux capture-pane -t terminal-tabs:backend -p -S -50 | tail -20
+tmux capture-pane -t tabz:backend -p -S -50 | tail -20
 
 # 2. Check for browser errors
-tmux capture-pane -t terminal-tabs:backend -p -S -100 | grep "\[Browser.*ERROR"
+tmux capture-pane -t tabz:backend -p -S -100 | grep "\[Browser.*ERROR"
 
 # 3. Verify terminal session exists
 tmux ls | grep "tt-bash"
