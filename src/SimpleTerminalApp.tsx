@@ -11,6 +11,8 @@ import { useSimpleTerminalStore, Terminal as StoredTerminal } from './stores/sim
 import { useSettingsStore } from './stores/useSettingsStore'
 import SimpleSpawnService from './services/SimpleSpawnService'
 import { backgroundGradients, getBackgroundCSS } from './styles/terminal-backgrounds'
+import { THEME_BACKGROUNDS, TERMINAL_TYPE_ABBREVIATIONS, COMMAND_ABBREVIATIONS } from './constants/terminalConfig'
+import { generateWindowId, getCurrentWindowId, updateUrlWithWindowId } from './utils/windowUtils'
 import {
   DndContext,
   closestCenter,
@@ -214,23 +216,6 @@ function SortableTab({ terminal, isActive, onActivate, onClose, dropZone, isDrag
   )
 }
 
-// Legacy theme-to-background mapping for migration (auto-assign backgrounds from themes)
-const THEME_BACKGROUNDS: Record<string, string> = {
-  default: 'dark-neutral',
-  amber: 'amber-warmth',
-  matrix: 'matrix-depths',
-  dracula: 'dracula-purple',
-  monokai: 'monokai-brown',
-  'solarized-dark': 'solarized-dark',
-  'github-dark': 'github-dark',
-  cyberpunk: 'cyberpunk-neon',
-  holographic: 'ocean-depths',
-  vaporwave: 'vaporwave-dream',
-  retro: 'amber-warmth',
-  synthwave: 'synthwave-sunset',
-  aurora: 'aurora-borealis',
-}
-
 function SimpleTerminalApp() {
   const [webSocketAgents, setWebSocketAgents] = useState<Agent[]>([])
   const [connectionStatus, setConnectionStatus] = useState<'connected' | 'disconnected' | 'connecting'>('disconnected')
@@ -258,24 +243,9 @@ function SimpleTerminalApp() {
   // Multi-window support: each browser window/tab has a unique ID
   const [currentWindowId] = useState(() => {
     const urlParams = new URLSearchParams(window.location.search)
-    const windowIdFromUrl = urlParams.get('window')
-
-    if (windowIdFromUrl) {
-      return windowIdFromUrl
-    }
-
-    // Main window uses 'main' as ID, new windows get unique IDs
-    const isMainWindow = !urlParams.has('window')
-    const newWindowId = isMainWindow ? 'main' : `window-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
-
-    // Update URL with window ID (without page reload)
-    if (!isMainWindow) {
-      const newUrl = new URL(window.location.href)
-      newUrl.searchParams.set('window', newWindowId)
-      window.history.replaceState({}, '', newUrl)
-    }
-
-    return newWindowId
+    const windowId = getCurrentWindowId(urlParams)
+    updateUrlWithWindowId(windowId)
+    return windowId
   })
 
   const {
@@ -995,29 +965,14 @@ function SimpleTerminalApp() {
     }
   }
 
-  // Terminal type abbreviations for short session names
-  const terminalTypeAbbreviations: Record<string, string> = {
-    'claude-code': 'cc',
-    'opencode': 'oc',
-    'codex': 'cx',
-    'gemini': 'gm',
-    'bash': 'bash',
-    'tui-tool': 'tui',
-    'default': 'term',
-  }
-
   // Generate short session name like "tt-cc-a3k" (Tabz - Claude Code - random suffix)
   const generateSessionName = (terminalType: string, label?: string, command?: string): string => {
-    // Special cases: TFE, LazyGit, etc. use their command as abbreviation
+    // Check command-specific abbreviations first (TFE, LazyGit, etc.)
     let abbrev: string
-    if (command === 'tfe') {
-      abbrev = 'tfe'
-    } else if (command === 'lazygit') {
-      abbrev = 'lg'
-    } else if (command === 'micro') {
-      abbrev = 'micro'
+    if (command && COMMAND_ABBREVIATIONS[command]) {
+      abbrev = COMMAND_ABBREVIATIONS[command]
     } else {
-      abbrev = terminalTypeAbbreviations[terminalType] || terminalType.slice(0, 4)
+      abbrev = TERMINAL_TYPE_ABBREVIATIONS[terminalType] || terminalType.slice(0, 4)
     }
 
     // Use random 3-char suffix to avoid collisions (like "tt-cc-a3k")
@@ -1200,7 +1155,7 @@ function SimpleTerminalApp() {
     if (!terminal) return
 
     // Generate new window ID if not specified
-    const newWindowId = targetWindowId || `window-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+    const newWindowId = targetWindowId || generateWindowId()
 
     console.log(`[SimpleTerminalApp] Popping out ${terminal.name} to window: ${newWindowId}`)
 

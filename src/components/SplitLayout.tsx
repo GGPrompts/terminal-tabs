@@ -7,17 +7,7 @@ import { Terminal as StoredTerminal } from '../stores/simpleTerminalStore';
 import { Agent } from '../types';
 import { useSimpleTerminalStore } from '../stores/simpleTerminalStore';
 import { useSettingsStore } from '../stores/useSettingsStore';
-
-const THEME_BACKGROUNDS: Record<string, string> = {
-  'amber': 'amber-warmth',
-  'green': 'matrix-code',
-  'purple': 'cyberpunk-neon',
-  'pink': 'vaporwave-dreams',
-  'blue': 'holographic',
-  'ocean': 'deep-ocean',
-  'dark': 'dark-neutral',
-  'default': 'dark-neutral',
-};
+import { THEME_BACKGROUNDS } from '../constants/terminalConfig';
 
 interface SplitLayoutProps {
   terminal: StoredTerminal;
