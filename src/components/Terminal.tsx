@@ -409,23 +409,28 @@ export const Terminal = React.forwardRef<any, TerminalProps>(
 
               console.log(`[Terminal] Initial fit complete for ${agent.name}: ${xterm.cols}x${xterm.rows}, container: ${containerWidth}x${containerHeight}`);
 
-              // Send initial dimensions to backend
-              if (
-                wsRef.current &&
-                wsRef.current.readyState === WebSocket.OPEN
-              ) {
-                console.log(`[Terminal] Sending resize to backend: ${xterm.cols}x${xterm.rows} for ${agent.name} (agentId: ${agent.id})`);
-                wsRef.current.send(
-                  JSON.stringify({
-                    type: "resize",
-                    terminalId: agent.id,
-                    cols: xterm.cols,
-                    rows: xterm.rows,
-                  }),
-                );
-              } else {
-                console.warn(`[Terminal] Cannot send resize - WebSocket not ready (readyState: ${wsRef.current?.readyState})`);
-              }
+              // Send initial dimensions to backend (with retry if WebSocket not ready)
+              const sendResize = (retries = 0) => {
+                if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+                  console.log(`[Terminal] Sending resize to backend: ${xterm.cols}x${xterm.rows} for ${agent.name} (agentId: ${agent.id})`);
+                  wsRef.current.send(
+                    JSON.stringify({
+                      type: "resize",
+                      terminalId: agent.id,
+                      cols: xterm.cols,
+                      rows: xterm.rows,
+                    }),
+                  );
+                } else if (retries < 10) {
+                  // Retry after 200ms if WebSocket not ready yet
+                  console.log(`[Terminal] WebSocket not ready, will retry resize (attempt ${retries + 1}/10)`);
+                  setTimeout(() => sendResize(retries + 1), 200);
+                } else {
+                  console.error(`[Terminal] Failed to send resize after 10 retries - WebSocket never became ready`);
+                }
+              };
+
+              sendResize();
             }
           }
         } catch (err) {
