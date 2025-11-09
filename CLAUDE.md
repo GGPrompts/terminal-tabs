@@ -5,9 +5,10 @@
 Tabz (Tab>_) is a **lightweight, tab-based terminal interface** for the web. Built with React, TypeScript, and xterm.js, it provides a simple alternative to complex canvas-based terminal managers.
 
 **Version**: 1.0.0
-**Status**: MVP Complete
+**Status**: MVP Complete, Legacy Code Cleaned ✅
 **Architecture**: Tab-based UI with WebSocket terminal backend
 **Extracted from**: [Opustrator](https://github.com/GGPrompts/opustrator) v3.14.2
+**Cleanup Complete**: November 8, 2025 - Removed ~1,000 lines of Opustrator legacy code
 
 ---
 
@@ -100,10 +101,11 @@ backend/
 - **Conditional scrollbar** - Hidden with tmux (default), visible without
 
 ### What Needs Work
+- ⚠️ **Tmux footer controls** (split, new window buttons don't work - see NEXT_SESSION_PROMPT.md)
 - Keyboard shortcuts (Ctrl+T, Ctrl+W, Ctrl+Tab)
 - Tab reordering (drag tabs)
 - Mobile responsiveness improvements
-- Split panes (future)
+- Split panes (future - may use bubbletea TUI spawn menu)
 
 ---
 
@@ -143,9 +145,10 @@ Use intuitive aliases in spawn-options:
 
 ## 🐛 Known Issues
 
-1. **No Keyboard Shortcuts** - Missing Ctrl+T, Ctrl+W, etc.
-2. **Mobile Untested** - May need responsive CSS work
-3. **Single Window** - Can't pop out tabs (future: window.open())
+1. **Tmux Footer Controls** - Split/window buttons in footer don't work (see NEXT_SESSION_PROMPT.md)
+2. **No Keyboard Shortcuts** - Missing Ctrl+T, Ctrl+W, etc.
+3. **Mobile Untested** - May need responsive CSS work
+4. **Single Window** - Can't pop out tabs (future: window.open())
 
 ## ✅ Recently Fixed (Nov 8, 2025)
 
@@ -417,3 +420,47 @@ tmux ls | grep "tt-bash"
 ---
 
 **Last Updated**: November 8, 2025
+
+---
+
+## 🧹 Legacy Code Cleanup (November 8, 2025)
+
+**Status:** ✅ **COMPLETED**
+
+### What Was Removed
+Successfully removed ~1,000 lines of Opustrator legacy code in 3 phases:
+
+**Phase 1: Rebranding**
+- Renamed from "Terminal Tabs" to "Tabz (Tab>_)"
+- Updated all package names, docs, scripts
+- Removed dockerode + 42 dependencies (~10MB)
+- Updated environment variables: `OPUSTRATOR_*` → `TABZ_*`
+
+**Phase 2: Backend Cleanup**
+- Removed `/api/layouts` endpoints (103 lines)
+- Deleted `layout-manager.js` module (137 lines)
+- Deleted `workspace.js` routes (109 lines)
+- Removed 8 unused API endpoints total
+
+**Phase 3: Frontend Cleanup**
+- Removed canvas background animation settings (85 lines)
+- Removed grid/snapping settings for infinite canvas
+- Removed file viewer/Monaco editor settings
+- Removed canvas navigation settings (WASD, minimap, zoom)
+- Migrated localStorage: `opustrator-settings` → `tabz-settings`
+
+### What Was Kept (Intentionally)
+- `/api/agents` endpoints - For future bubbletea TUI spawn menu
+- `/api/spawn-options` - Used by settings modal
+- `/api/tmux/*` endpoints - Core tmux functionality
+- Terminal backgrounds (CSS gradients) - NOT canvas backgrounds
+- All terminal customization features
+
+### Impact
+- **17 files changed**, 110 insertions(+), 1,031 deletions(-)
+- **2 files deleted**, **43 packages removed**
+- **User settings preserved** via automatic migration
+- **No breaking changes** to core functionality
+
+**Full details:** See `OPUSTRATOR_LEGACY_AUDIT.md`
+
