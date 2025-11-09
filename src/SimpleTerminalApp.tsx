@@ -359,6 +359,24 @@ function SimpleTerminalApp() {
     }
   }, []);
 
+  // Set browser tab title based on window and active terminal
+  useEffect(() => {
+    if (currentWindowId === 'main') {
+      document.title = 'Tabz'
+    } else {
+      // For popped-out windows, show active terminal name or window number
+      const activeTerminal = storedTerminals.find(t => t.id === activeTerminalId)
+      if (activeTerminal && visibleTerminals.length > 0) {
+        document.title = `Tabz - ${activeTerminal.name}`
+      } else {
+        // Extract a simple number from window ID for clean display
+        const windowMatch = currentWindowId.match(/window-(\d+)/)
+        const windowNum = windowMatch ? Math.floor(parseInt(windowMatch[1]) / 1000000000) : '?'
+        document.title = `Tabz ${windowNum}`
+      }
+    }
+  }, [currentWindowId, activeTerminalId, storedTerminals, visibleTerminals.length])
+
   // Check for ?active=xxx parameter to set initial active terminal (for popout windows)
   // CRITICAL: Watch full storedTerminals array, not just length, to catch windowId changes
   const activeFromUrlRef = useRef<string | null>(null)
