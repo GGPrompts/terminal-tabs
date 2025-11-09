@@ -308,6 +308,137 @@ Use intuitive aliases in spawn-options:
 1. **No Keyboard Shortcuts** - Missing Ctrl+T, Ctrl+W, etc.
 2. **Mobile Untested** - May need responsive CSS work
 
+---
+
+## ✅ Recently Fixed (Nov 10, 2025) - Phase 4 Critical Bugs
+
+### Phase 4 Refactoring Completion + Bug Fixes
+**Status:** ✅ **COMPLETED** - SimpleTerminalApp.tsx successfully decomposed from 2,207 → 1,147 lines (48% reduction)
+
+**Hooks Extracted:**
+- `useWebSocketManager.ts` (431 lines) - WebSocket connection management
+- `useKeyboardShortcuts.ts` (127 lines) - Keyboard event handlers
+- `useDragDrop.ts` (338 lines) - Drag-and-drop logic
+- `useTerminalSpawning.ts` (252 lines) - Terminal spawn logic
+- `usePopout.ts` (161 lines) - Multi-window popout feature
+
+**Critical Bugs Fixed:**
+
+### Bug #1: Terminals Completely Unusable (wsRef Sharing)
+**Problem:** After Phase 4 refactoring, no terminal input worked. Typing, TUI tools, everything was broken.
+
+**Root Cause:** `useWebSocketManager` created its **own internal `wsRef`** instead of using the one from `SimpleTerminalApp.tsx`:
+```typescript
+// BROKEN (Phase 4 initial refactoring)
+export function useWebSocketManager(...) {
+  const wsRef = useRef<WebSocket | null>(null) // Creates NEW ref!
+  // WebSocket connected to this internal ref
+}
+
+// SimpleTerminalApp.tsx passes OLD wsRef to Terminal components
+<Terminal wsRef={wsRef} ... />
+// Result: Terminal components had null WebSocket → no input worked!
+```
+
+**Fix:** Pass `wsRef` as a parameter to `useWebSocketManager` so all components share the same WebSocket:
+```typescript
+// FIXED
+export function useWebSocketManager(
+  // ... other params
+  wsRef: React.MutableRefObject<WebSocket | null>, // Use parent's ref!
+) {
+  // No longer creates its own - uses the one passed in
+}
+```
+
+**Files Modified:**
+- `src/hooks/useWebSocketManager.ts` - Added wsRef parameter
+- `src/SimpleTerminalApp.tsx` - Pass wsRef to hook
+
+### Bug #2: Terminals Stuck at Tiny Size (ResizeObserver Timing)
+**Problem:** Terminals rendered but stayed at a tiny size, didn't resize to fill container.
+
+**Root Cause:** In `useTerminalResize.ts`, ResizeObserver setup had race condition:
+```typescript
+// BROKEN (Phase 3 extraction)
+useEffect(() => {
+  if (!terminalRef.current?.parentElement) return; // Returns if null!
+  // Set up ResizeObserver...
+}, [agentId, debouncedResize]); // Only runs once at mount
+
+// If terminalRef.current is null when this runs (during initialization),
+// ResizeObserver is NEVER set up!
+```
+
+**Fix:** Wait for xterm initialization and re-run when refs become available:
+```typescript
+// FIXED
+useEffect(() => {
+  if (!terminalRef.current?.parentElement ||
+      !xtermRef.current ||
+      !fitAddonRef.current) {
+    return; // Wait for all refs
+  }
+  // Set up ResizeObserver...
+}, [agentId, debouncedResize, xtermRef.current, fitAddonRef.current]);
+// Re-runs when terminal initializes!
+```
+
+**Files Modified:**
+- `src/hooks/useTerminalResize.ts` - Fixed useEffect dependencies
+
+### Bug #3: TypeScript Errors (Invalid Props)
+**Problem:** Build failed with TypeScript errors about invalid `isFocused` prop.
+
+**Fix:** Removed `isFocused` prop from all Terminal components in SplitLayout.tsx (4 locations).
+
+**Files Modified:**
+- `src/components/SplitLayout.tsx` - Removed invalid props
+
+---
+
+### Refactoring Best Practices (Lessons Learned)
+
+**When extracting custom hooks that manage shared resources:**
+
+1. **Identify Shared Refs Early** ⚠️
+   - Before extracting, check for `useRef` that MUST be shared between hook and components
+   - WebSocket refs, DOM refs, etc. should be passed as parameters, not created internally
+   - **Rule:** If a ref is used by both the hook AND child components, pass it as a parameter!
+
+2. **Test with Real Usage Immediately** ⚠️
+   - Don't just check that code compiles
+   - Actually spawn terminals and try typing
+   - Test resize behavior by dragging window
+   - TypeScript errors are just the beginning!
+
+3. **Watch for Timing Dependencies in useEffect** ⚠️
+   - If a `useEffect` has an early return checking a ref, make sure dependencies include that ref
+   - Use `ref.current` in dependency array to re-run when ref changes
+   - Common pattern: Wait for DOM refs AND library instances (xterm) before setup
+
+4. **Check TypeScript Errors in Both Directions** ⚠️
+   - Missing required props (hook forgot to pass something)
+   - Invalid extra props (calling code passes something the API doesn't accept)
+
+**Testing Checklist After Refactoring:**
+```bash
+# 1. TypeScript compilation
+npm run build
+
+# 2. Visual inspection
+# - Open http://localhost:5173
+# - Spawn a terminal
+# - Try typing (tests WebSocket)
+# - Resize window (tests ResizeObserver)
+# - Spawn TUI tool (tests complex interactions)
+
+# 3. Check browser console for errors
+# 4. Check backend logs via: tmux capture-pane -t tabz:backend -p -S -50
+```
+
+---
+
 ## ✅ Recently Fixed (Nov 9, 2025)
 
 ### Multi-Window Tab Management
