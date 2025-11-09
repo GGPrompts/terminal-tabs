@@ -7,6 +7,90 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.2.0] - 2025-11-09
+
+### ✨ Major Features
+
+#### Multi-Window Support (COMPLETE) 🎉
+- **Move terminals between browser windows** - Click ↗ button to pop out tabs
+- **Perfect for multi-monitor setups** - Organize terminals across screens
+- **Window isolation** - Each window independently manages its own terminals
+- **Shared state** - All windows share localStorage via Zustand persist
+- **Independent reconnection** - Each window only reconnects to its own terminals
+- **Chrome side panel integration** - Works great with Chrome's split view
+- **Backend coordination** - Single WebSocket per window, proper message routing
+
+#### Split Terminal Layouts (Phase 1 - COMPLETE)
+- **Horizontal/vertical splits** - Split any tab into 2-4 panes
+- **Drag-to-resize** - ResizableBox for adjustable pane sizes
+- **Focus tracking** - Visual indicators show which pane is active
+- **Footer integration** - Customization controls target focused pane
+- **Persistent layouts** - Split configurations survive refresh
+- **Independent terminals** - Each pane is a full terminal instance
+
+#### Tab Interaction Improvements
+- **Fixed tab clicking** - 8px drag threshold allows tabs to be clicked
+- **Tab reordering** - Drag tabs to reorder (dnd-kit integration)
+- **Close buttons work** - Reliable tab closure
+
+### 🐛 Critical Bug Fixes
+
+#### Session Persistence & Reconnection
+- **Fixed duplicate terminals on refresh** - Backend now reuses existing registry entries
+- **Proper tmux session reconnection** - Terminals reconnect to existing sessions instead of creating duplicates
+- **Terminal names stay consistent** - No more TFE-2, TFE-3 duplicates
+- **Customizations persist** - Font size, theme, transparency survive reconnection
+- **Prevented auto-deletion** - Tmux terminals no longer deleted on PTY close during reconnection
+- **Fixed "Terminal not found" errors** - Frontend clears stale agent IDs on disconnect
+
+#### Multi-Window Isolation
+- **Backend output routing** - `terminalOwners` map prevents cross-window output contamination
+- **Frontend window filtering** - Terminals filtered by windowId before connection
+- **No fallback terminal creation** - Prevents cross-window adoption of terminals
+- **Tmux detach API** - Clean handoff when moving terminals between windows
+- **URL parameter activation** - Popout windows properly activate terminals via `?active=` parameter
+- **xterm.open retry logic** - Handles 0x0 containers in popout windows
+
+#### Split Terminal Customization
+- **Footer controls target focused pane** - Fixed refs to use `focusedTerminalId` instead of `activeTerminalId`
+- **Independent pane customization** - Font size, theme, transparency apply to correct pane
+
+#### Tab Interaction
+- **Tab clicking works** - Added 8px `activationConstraint` to PointerSensor
+- **Drag still works** - Requires 8px movement before drag starts
+- **Close button responsive** - Properly registers clicks
+
+#### Duplicate Spawn Prevention
+- **Session-aware duplicate detection** - Include sessionName in spawn key to allow multiple terminals with same name in different sessions
+
+### 🎨 UI/UX Improvements
+- **Visual focus indicators** - Glowing divider on focused pane in splits
+- **Popout button (↗)** - Intuitive icon for moving tabs to new windows
+- **Split layout rendering** - Clean, resizable pane UI with proper borders
+- **Footer pane info** - Shows which pane is focused in split layouts
+
+### 🔧 Technical Improvements
+- **Terminal registry reconnection logic** - Reuses existing entries instead of creating duplicates
+- **PTY close handling** - Different behavior for tmux vs non-tmux terminals
+- **WebSocket cleanup** - Clears agents and agent IDs on disconnect
+- **Window ID tracking** - Unique IDs for each browser window/tab
+- **Terminal ownership tracking** - Backend tracks which WebSocket owns which terminal
+- **BroadcastChannel** - Cross-window state synchronization via localStorage
+- **ResizeObserver** - Proper pane resizing in split layouts
+
+### 📝 Code Quality
+- **Component size analysis** - Identified SimpleTerminalApp (2,207 lines) and Terminal (1,385 lines) for refactoring
+- **Code duplication analysis** - Found ~280 lines duplicated in dropdown components
+- **Refactoring roadmap** - 6-phase plan with time estimates (25-35 hours)
+- **Quick wins identified** - Constants extraction, memoization, JSDoc comments
+
+### 📚 Documentation
+- **PLAN.md** - Added comprehensive refactoring recommendations
+- **Multi-window architecture** - Documented critical popout flow principles
+- **Component analysis table** - Graded 12 major files with action items
+
+---
+
 ## [1.1.0] - 2025-11-08
 
 ### ✨ Major Features
@@ -70,11 +154,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Safe spawn tracking** - `useRef` eliminates race conditions
 - **Error logging** - Validation failures now logged (no silent failures)
 
+### 🧹 Legacy Code Cleanup
+- **Rebranded to Tabz** - Changed from "Terminal Tabs" to "Tabz (Tab>_)"
+- **Removed dockerode** - Eliminated 42 dependencies (~10MB)
+- **Removed backend API endpoints** - Deleted `/api/layouts` (103 lines), `/api/workspace` (109 lines)
+- **Deleted unused modules** - Removed `layout-manager.js` (137 lines), `workspace.js`
+- **Cleaned frontend stores** - Removed ~120 lines of canvas animation/grid/file viewer settings
+- **localStorage migration** - Automatic migration from `opustrator-settings` → `tabz-settings`
+- **Environment variables** - Updated `OPUSTRATOR_*` → `TABZ_*`
+- **Total cleanup** - 17 files changed, 110 insertions(+), 1,031 deletions(-)
+
 ### 📝 Documentation
 - **CLAUDE.md** - Updated with persistence fix details and current status
 - **NEXT_SESSION_PROMPT.md** - Complete session summary with debugging notes
 - **DEBUG_PERSISTENCE.md** - Detailed debugging analysis (user-created)
 - **Launcher scripts** - `start.sh`, `stop.sh`, `start-tmux.sh` with docs
+- **OPUSTRATOR_LEGACY_AUDIT.md** - Complete cleanup audit and completion notes
 
 ---
 
