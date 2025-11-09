@@ -407,11 +407,14 @@ export const Terminal = React.forwardRef<any, TerminalProps>(
             if (containerWidth > 0 && containerHeight > 0) {
               fitAddon.fit();
 
+              console.log(`[Terminal] Initial fit complete for ${agent.name}: ${xterm.cols}x${xterm.rows}, container: ${containerWidth}x${containerHeight}`);
+
               // Send initial dimensions to backend
               if (
                 wsRef.current &&
                 wsRef.current.readyState === WebSocket.OPEN
               ) {
+                console.log(`[Terminal] Sending resize to backend: ${xterm.cols}x${xterm.rows} for ${agent.name} (agentId: ${agent.id})`);
                 wsRef.current.send(
                   JSON.stringify({
                     type: "resize",
@@ -420,6 +423,8 @@ export const Terminal = React.forwardRef<any, TerminalProps>(
                     rows: xterm.rows,
                   }),
                 );
+              } else {
+                console.warn(`[Terminal] Cannot send resize - WebSocket not ready (readyState: ${wsRef.current?.readyState})`);
               }
             }
           }
