@@ -24,6 +24,7 @@ interface SplitLayoutProps {
   terminals: StoredTerminal[];
   agents: Agent[];
   onClose: (terminalId: string) => void;
+  onPopOut: (terminalId: string) => void;
   onCommand: (cmd: string, terminalId: string) => void;
   wsRef: React.RefObject<WebSocket | null>;
   terminalRef?: React.RefObject<any>;
@@ -35,6 +36,7 @@ export const SplitLayout: React.FC<SplitLayoutProps> = ({
   terminals,
   agents,
   onClose,
+  onPopOut,
   onCommand,
   wsRef,
   terminalRef,
@@ -226,16 +228,28 @@ export const SplitLayout: React.FC<SplitLayoutProps> = ({
           className={`split-pane split-pane-left ${leftTerminal.id === focusedTerminalId ? 'focused' : ''}`}
           onClick={() => setFocusedTerminal(leftTerminal.id)}
         >
-          <button
-            className="pane-close-button"
-            onClick={(e) => {
-              e.stopPropagation();
-              handleClosePane(leftTerminal.id);
-            }}
-            title={`Close ${leftTerminal.name}`}
-          >
-            ✕
-          </button>
+          <div className="pane-buttons">
+            <button
+              className="pane-popout-button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onPopOut(leftTerminal.id);
+              }}
+              title={`Pop out ${leftTerminal.name} to new tab`}
+            >
+              ↗
+            </button>
+            <button
+              className="pane-close-button"
+              onClick={(e) => {
+                e.stopPropagation();
+                handleClosePane(leftTerminal.id);
+              }}
+              title={`Close ${leftTerminal.name}`}
+            >
+              ✕
+            </button>
+          </div>
           <div style={{ width: '100%', height: '100%' }}>
             <Terminal
               key={`term-${leftTerminal.id}`}
@@ -261,16 +275,28 @@ export const SplitLayout: React.FC<SplitLayoutProps> = ({
           style={{ flex: 1 }}
           onClick={() => setFocusedTerminal(rightTerminal.id)}
         >
-          <button
-            className="pane-close-button"
-            onClick={(e) => {
-              e.stopPropagation();
-              handleClosePane(rightTerminal.id);
-            }}
-            title={`Close ${rightTerminal.name}`}
-          >
-            ✕
-          </button>
+          <div className="pane-buttons">
+            <button
+              className="pane-popout-button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onPopOut(rightTerminal.id);
+              }}
+              title={`Pop out ${rightTerminal.name} to new tab`}
+            >
+              ↗
+            </button>
+            <button
+              className="pane-close-button"
+              onClick={(e) => {
+                e.stopPropagation();
+                handleClosePane(rightTerminal.id);
+              }}
+              title={`Close ${rightTerminal.name}`}
+            >
+              ✕
+            </button>
+          </div>
           <Terminal
             key={`term-${rightTerminal.id}`}
             ref={rightTerminal.id === activeTerminalId ? terminalRef : null}
@@ -375,16 +401,28 @@ export const SplitLayout: React.FC<SplitLayoutProps> = ({
           className={`split-pane split-pane-top ${topTerminal.id === focusedTerminalId ? 'focused' : ''}`}
           onClick={() => setFocusedTerminal(topTerminal.id)}
         >
-          <button
-            className="pane-close-button"
-            onClick={(e) => {
-              e.stopPropagation();
-              handleClosePane(topTerminal.id);
-            }}
-            title={`Close ${topTerminal.name}`}
-          >
-            ✕
-          </button>
+          <div className="pane-buttons">
+            <button
+              className="pane-popout-button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onPopOut(topTerminal.id);
+              }}
+              title={`Pop out ${topTerminal.name} to new tab`}
+            >
+              ↗
+            </button>
+            <button
+              className="pane-close-button"
+              onClick={(e) => {
+                e.stopPropagation();
+                handleClosePane(topTerminal.id);
+              }}
+              title={`Close ${topTerminal.name}`}
+            >
+              ✕
+            </button>
+          </div>
           <div style={{ width: '100%', height: '100%' }}>
             <Terminal
               key={`term-${topTerminal.id}`}
@@ -410,16 +448,28 @@ export const SplitLayout: React.FC<SplitLayoutProps> = ({
           style={{ flex: 1 }}
           onClick={() => setFocusedTerminal(bottomTerminal.id)}
         >
-          <button
-            className="pane-close-button"
-            onClick={(e) => {
-              e.stopPropagation();
-              handleClosePane(bottomTerminal.id);
-            }}
-            title={`Close ${bottomTerminal.name}`}
-          >
-            ✕
-          </button>
+          <div className="pane-buttons">
+            <button
+              className="pane-popout-button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onPopOut(bottomTerminal.id);
+              }}
+              title={`Pop out ${bottomTerminal.name} to new tab`}
+            >
+              ↗
+            </button>
+            <button
+              className="pane-close-button"
+              onClick={(e) => {
+                e.stopPropagation();
+                handleClosePane(bottomTerminal.id);
+              }}
+              title={`Close ${bottomTerminal.name}`}
+            >
+              ✕
+            </button>
+          </div>
           <Terminal
             key={`term-${bottomTerminal.id}`}
             ref={bottomTerminal.id === activeTerminalId ? terminalRef : null}

@@ -55,10 +55,10 @@ interface SortableTabProps {
   onClose: (e: React.MouseEvent) => void
   dropZone: DropZone
   isDraggedOver: boolean
-  isEdgeZoneActive: boolean
+  mousePosition: React.MutableRefObject<{ x: number; y: number }>
 }
 
-function SortableTab({ terminal, isActive, onActivate, onClose, dropZone, isDraggedOver, isEdgeZoneActive }: SortableTabProps) {
+function SortableTab({ terminal, isActive, onActivate, onClose, dropZone, isDraggedOver, mousePosition }: SortableTabProps) {
   const {
     attributes,
     listeners,
@@ -72,13 +72,79 @@ function SortableTab({ terminal, isActive, onActivate, onClose, dropZone, isDrag
     animateLayoutChanges: () => false,
   })
 
-  // Freeze tabs when edge zone is active (prevents reordering shifts during edge-zone drag)
-  const shouldTransform = !isEdgeZoneActive
-
   const style = {
-    transform: shouldTransform ? CSS.Transform.toString(transform) : undefined,
-    transition: isDragging && shouldTransform ? undefined : transition,
+    // ONLY show transform for the item being dragged
+    // Other tabs stay completely static (no shifting)
+    transform: isDragging ? CSS.Transform.toString(transform) : undefined,
+    transition: isDragging ? undefined : transition,
     opacity: isDragging ? 0.5 : 1,
+  }
+
+  // Helper to get all terminals in the store (we'll pass this as a prop later)
+  const { terminals: allTerminals } = useSimpleTerminalStore()
+
+  // Check if this tab has splits (can't merge into it via any edge)
+  const hasSplits = terminal.splitLayout && terminal.splitLayout.type !== 'single'
+
+  // Determine if we're in an edge zone or center zone for visual feedback
+  const [isEdgeZone, setIsEdgeZone] = React.useState(false)
+  React.useEffect(() => {
+    if (isDraggedOver && dropZone) {
+      const tabElement = document.querySelector(`[data-tab-id="${terminal.id}"]`)
+      if (tabElement) {
+        const rect = tabElement.getBoundingClientRect()
+        // Use current mouse position from parent
+        const xPercent = (mousePosition.current.x - rect.left) / rect.width
+        const yPercent = (mousePosition.current.y - rect.top) / rect.height
+        const edgeThreshold = 0.20
+
+        const inEdge =
+          yPercent < edgeThreshold ||
+          yPercent > 1 - edgeThreshold ||
+          xPercent < edgeThreshold ||
+          xPercent > 1 - edgeThreshold
+
+        setIsEdgeZone(inEdge)
+      }
+    }
+  }, [isDraggedOver, dropZone, terminal.id])
+
+  // Show blocked overlay when trying to use ANY edge zone on a split tab
+  const isBlocked = isDraggedOver && hasSplits && isEdgeZone
+
+  // Render split icon with arrow indicator
+  const renderTabIcon = () => {
+    if (terminal.status === 'spawning') {
+      return <span className="tab-icon-single">⏳</span>
+    }
+
+    // Check if this is a split terminal
+    if (terminal.splitLayout && terminal.splitLayout.type !== 'single' && terminal.splitLayout.panes.length > 0) {
+      const isVertical = terminal.splitLayout.type === 'vertical'
+      const splitArrow = isVertical ? '↔' : '↕'
+
+      // Get icons from both panes
+      const paneIcons = terminal.splitLayout.panes.map(pane => {
+        const paneTerminal = allTerminals.find(t => t.id === pane.terminalId)
+        return paneTerminal?.icon || '💻'
+      })
+
+      return (
+        <span className="tab-icon-split">
+          <span className="split-arrow">{splitArrow}</span>
+          {paneIcons.map((icon, idx) => (
+            <span key={idx} className="split-emoji">{icon}</span>
+          ))}
+        </span>
+      )
+    }
+
+    // Regular single terminal
+    return (
+      <span className="tab-icon-single">
+        {terminal.icon || TERMINAL_TYPES.find(t => t.value === terminal.terminalType)?.icon || '💻'}
+      </span>
+    )
   }
 
   return (
@@ -86,14 +152,12 @@ function SortableTab({ terminal, isActive, onActivate, onClose, dropZone, isDrag
       ref={setNodeRef}
       style={style}
       data-tab-id={terminal.id}
-      className={`tab ${isActive ? 'active' : ''} ${terminal.status === 'spawning' ? 'spawning' : ''} ${isDraggedOver ? 'drag-over' : ''}`}
+      className={`tab ${isActive ? 'active' : ''} ${terminal.status === 'spawning' ? 'spawning' : ''} ${isDraggedOver ? 'drag-over' : ''} ${isBlocked ? 'merge-blocked' : ''}`}
       onClick={onActivate}
       {...attributes}
       {...listeners}
     >
-      <span className="tab-icon">
-        {terminal.status === 'spawning' ? '⏳' : (terminal.icon || TERMINAL_TYPES.find(t => t.value === terminal.terminalType)?.icon || '💻')}
-      </span>
+      {renderTabIcon()}
       <span className="tab-label">{terminal.name}</span>
       <button
         className="tab-close"
@@ -104,12 +168,24 @@ function SortableTab({ terminal, isActive, onActivate, onClose, dropZone, isDrag
       </button>
 
       {/* Drop Zone Overlay - shows when dragging over this tab */}
-      {isDraggedOver && dropZone && dropZone !== 'center' && (
-        <div className="drop-zone-overlay">
-          {dropZone === 'left' && <div className="drop-zone-left"></div>}
-          {dropZone === 'right' && <div className="drop-zone-right"></div>}
-          {dropZone === 'top' && <div className="drop-zone-top"></div>}
-          {dropZone === 'bottom' && <div className="drop-zone-bottom"></div>}
+      {isDraggedOver && dropZone && !isBlocked && (
+        <div className={`drop-zone-overlay ${!isEdgeZone ? 'center-reorder' : ''}`}>
+          {isEdgeZone && (
+            <>
+              {dropZone === 'left' && <div className="drop-zone-left"></div>}
+              {dropZone === 'right' && <div className="drop-zone-right"></div>}
+              {dropZone === 'top' && <div className="drop-zone-top"></div>}
+              {dropZone === 'bottom' && <div className="drop-zone-bottom"></div>}
+            </>
+          )}
+        </div>
+      )}
+
+      {/* Blocked Overlay - shows when trying to split into a split tab */}
+      {isBlocked && (
+        <div className="merge-blocked-overlay">
+          <div className="blocked-icon">🚫</div>
+          <div className="blocked-text">Can't split into split tab<br/>(Use center to reorder)</div>
         </div>
       )}
     </div>
@@ -182,6 +258,10 @@ function SimpleTerminalApp() {
     })
   )
 
+  // Use pointer-only collision detection (no sortable auto-reordering)
+  // We handle reordering manually in handleDragEnd
+  const customCollisionDetection = pointerWithin
+
   // Filter out hidden terminals (those that are part of splits)
   const visibleTerminals = useMemo(() => {
     return storedTerminals.filter(t => !t.isHidden)
@@ -230,6 +310,31 @@ function SimpleTerminalApp() {
       // If dragging, continuously update drop zone
       if (draggedTerminalId && dropZoneState) {
         const zone = detectDropZone(dropZoneState.terminalId)
+
+        // PREVENT MERGE INTO EXISTING SPLITS: Block edge zones (splits) if target has splits
+        const targetTerminal = storedTerminals.find(t => t.id === dropZoneState.terminalId)
+        if (targetTerminal?.splitLayout && targetTerminal.splitLayout.type !== 'single') {
+          // Check if we're in an edge zone (trying to split)
+          const tabElement = document.querySelector(`[data-tab-id="${dropZoneState.terminalId}"]`)
+          if (tabElement) {
+            const rect = tabElement.getBoundingClientRect()
+            const xPercent = (mousePosition.current.x - rect.left) / rect.width
+            const yPercent = (mousePosition.current.y - rect.top) / rect.height
+            const edgeThreshold = 0.20
+
+            const isEdgeZone =
+              yPercent < edgeThreshold ||
+              yPercent > 1 - edgeThreshold ||
+              xPercent < edgeThreshold ||
+              xPercent > 1 - edgeThreshold
+
+            if (isEdgeZone) {
+              // In edge zone trying to split - don't update zone
+              return
+            }
+          }
+        }
+
         // Only update if zone actually changed (avoid unnecessary re-renders)
         if (zone !== dropZoneState.zone) {
           setDropZoneState({ terminalId: dropZoneState.terminalId, zone })
@@ -238,7 +343,7 @@ function SimpleTerminalApp() {
     }
     window.addEventListener('mousemove', handleMouseMove)
     return () => window.removeEventListener('mousemove', handleMouseMove)
-  }, [draggedTerminalId, dropZoneState])
+  }, [draggedTerminalId, dropZoneState, storedTerminals])
 
   // Load spawn options from JSON file
   const loadSpawnOptions = () => {
@@ -950,6 +1055,59 @@ function SimpleTerminalApp() {
     removeTerminal(terminalId)
   }
 
+  // Pop out pane to new tab (undo split)
+  const handlePopOutPane = (paneTerminalId: string) => {
+    // Find which split container has this pane
+    const splitContainer = storedTerminals.find(t =>
+      t.splitLayout?.panes?.some(p => p.terminalId === paneTerminalId)
+    )
+
+    if (!splitContainer || !splitContainer.splitLayout) {
+      console.warn('[SimpleTerminalApp] No split container found for pane:', paneTerminalId)
+      return
+    }
+
+    const paneTerminal = storedTerminals.find(t => t.id === paneTerminalId)
+    if (!paneTerminal) {
+      console.warn('[SimpleTerminalApp] Pane terminal not found:', paneTerminalId)
+      return
+    }
+
+    console.log(`[SimpleTerminalApp] Popping out pane ${paneTerminalId} to new tab`)
+
+    // Unhide the pane terminal (make it visible in tab bar)
+    updateTerminal(paneTerminalId, { isHidden: false })
+
+    // Remove pane from split
+    const remainingPanes = splitContainer.splitLayout.panes.filter(
+      p => p.terminalId !== paneTerminalId
+    )
+
+    if (remainingPanes.length === 1) {
+      // Only 1 pane left - convert split container back to single terminal
+      console.log(`[SimpleTerminalApp] Only 1 pane remaining, converting split to single terminal`)
+      updateTerminal(splitContainer.id, {
+        splitLayout: { type: 'single', panes: [] }
+      })
+      // Unhide the remaining pane
+      const remainingPaneTerminalId = remainingPanes[0].terminalId
+      updateTerminal(remainingPaneTerminalId, { isHidden: false })
+    } else if (remainingPanes.length > 1) {
+      // Still have multiple panes
+      updateTerminal(splitContainer.id, {
+        splitLayout: {
+          ...splitContainer.splitLayout,
+          panes: remainingPanes
+        }
+      })
+    }
+
+    // Set the popped-out terminal as active
+    setActiveTerminal(paneTerminalId)
+
+    console.log(`[SimpleTerminalApp] ✅ Popped out pane to new tab: ${paneTerminal.name}`)
+  }
+
   const handleClearAllSessions = async () => {
     if (!confirm('⚠️ Clear all sessions and localStorage?\n\nThis will:\n• Kill all active tmux sessions\n• Close all terminals\n• Clear all stored data\n\nThis cannot be undone!')) {
       return
@@ -1007,6 +1165,7 @@ function SimpleTerminalApp() {
   }
 
   // Detect drop zone based on actual mouse position over element
+  // NEW MODEL: All 4 edges = split, center = reorder
   const detectDropZone = (overTabId: string): DropZone => {
     // Get the DOM element for the tab being hovered over
     const tabElement = document.querySelector(`[data-tab-id="${overTabId}"]`)
@@ -1024,16 +1183,18 @@ function SimpleTerminalApp() {
     const xPercent = relativeX / rect.width
     const yPercent = relativeY / rect.height
 
-    // Edge zones are 25% of width/height
-    const edgeThreshold = 0.25
+    // Edge zones for SPLITS (20% on all sides)
+    const edgeThreshold = 0.20
 
-    // Priority: check edges first (top/bottom have priority over left/right for corners)
+    // Check all 4 edges (priority: top/bottom first, then left/right)
     if (yPercent < edgeThreshold) return 'top'
     if (yPercent > 1 - edgeThreshold) return 'bottom'
     if (xPercent < edgeThreshold) return 'left'
     if (xPercent > 1 - edgeThreshold) return 'right'
 
-    return 'center'
+    // Center area (60% x 60%) is for REORDERING
+    // Left half of center vs right half of center
+    return xPercent < 0.5 ? 'left' : 'right'
   }
 
   // Handle drag start
@@ -1056,6 +1217,33 @@ function SimpleTerminalApp() {
       return
     }
 
+    // PREVENT MERGE INTO EXISTING SPLITS: Block edge zones if target has splits
+    const targetTerminal = storedTerminals.find(t => t.id === over.id)
+    if (targetTerminal?.splitLayout && targetTerminal.splitLayout.type !== 'single') {
+      const zone = detectDropZone(over.id as string)
+      // Check if detected zone is in an edge (trying to split)
+      const tabElement = document.querySelector(`[data-tab-id="${over.id}"]`)
+      if (tabElement) {
+        const rect = tabElement.getBoundingClientRect()
+        const xPercent = (mousePosition.current.x - rect.left) / rect.width
+        const yPercent = (mousePosition.current.y - rect.top) / rect.height
+        const edgeThreshold = 0.20
+
+        const isEdgeZone =
+          yPercent < edgeThreshold ||
+          yPercent > 1 - edgeThreshold ||
+          xPercent < edgeThreshold ||
+          xPercent > 1 - edgeThreshold
+
+        if (isEdgeZone) {
+          // In edge zone - don't allow (block split into split tab)
+          // Force to center-left (default reorder position)
+          setDropZoneState({ terminalId: over.id as string, zone: 'left' })
+          return
+        }
+      }
+    }
+
     const zone = detectDropZone(over.id as string)
     setDropZoneState({ terminalId: over.id as string, zone })
   }
@@ -1064,6 +1252,14 @@ function SimpleTerminalApp() {
   const handleMerge = (sourceTabId: string, targetTabId: string, dropZone: DropZone) => {
     if (!dropZone || dropZone === 'center') {
       console.error('[SimpleTerminalApp] Invalid drop zone for merge:', dropZone)
+      return
+    }
+
+    // PREVENT MERGE INTO EXISTING SPLITS: Check if target already has splits
+    const targetTerminal = storedTerminals.find(t => t.id === targetTabId)
+    if (targetTerminal?.splitLayout && targetTerminal.splitLayout.type !== 'single') {
+      console.warn('[SimpleTerminalApp] Cannot merge into tab that already has splits:', targetTabId)
+      console.log('[SimpleTerminalApp] 💡 Tip: Pop out panes to new tabs first, or drag to reorder tabs instead')
       return
     }
 
@@ -1127,23 +1323,54 @@ function SimpleTerminalApp() {
       return
     }
 
-    // Check if we should merge (drop zone is edge)
-    if (currentDropZone && currentDropZone.zone && currentDropZone.zone !== 'center') {
-      handleMerge(active.id as string, over.id as string, currentDropZone.zone)
-      return
-    }
+    // NEW MODEL: All 4 edges = split, center (left/right halves) = reorder
+    if (currentDropZone && currentDropZone.zone) {
+      // Check if this is an edge zone (split) or center zone (reorder)
+      const targetElement = document.querySelector(`[data-tab-id="${over.id}"]`)
+      if (targetElement) {
+        const rect = targetElement.getBoundingClientRect()
+        const mouseX = mousePosition.current.x
+        const mouseY = mousePosition.current.y
+        const xPercent = (mouseX - rect.left) / rect.width
+        const yPercent = (mouseY - rect.top) / rect.height
+        const edgeThreshold = 0.20
 
-    // Otherwise, just reorder visible terminals
-    const oldIndex = visibleTerminals.findIndex(t => t.id === active.id)
-    const newIndex = visibleTerminals.findIndex(t => t.id === over.id)
+        // Determine if we're in an edge zone or center zone
+        const isEdgeZone =
+          yPercent < edgeThreshold ||
+          yPercent > 1 - edgeThreshold ||
+          xPercent < edgeThreshold ||
+          xPercent > 1 - edgeThreshold
 
-    if (oldIndex !== -1 && newIndex !== -1) {
-      // Create new order preserving hidden terminals
-      const visibleReordered = arrayMove(visibleTerminals, oldIndex, newIndex)
-      const hiddenTerminals = storedTerminals.filter(t => t.isHidden)
-      const newOrder = [...visibleReordered, ...hiddenTerminals]
-      reorderTerminals(newOrder)
-      console.log(`[SimpleTerminalApp] Reordered tabs: ${active.id} moved from ${oldIndex} to ${newIndex}`)
+        if (isEdgeZone) {
+          // Edge zone = create split
+          handleMerge(active.id as string, over.id as string, currentDropZone.zone)
+          return
+        } else {
+          // Center zone = reorder tabs
+          const oldIndex = visibleTerminals.findIndex(t => t.id === active.id)
+          const newIndex = visibleTerminals.findIndex(t => t.id === over.id)
+
+          if (oldIndex !== -1 && newIndex !== -1) {
+            // If dropping on right half of center, insert AFTER the target
+            const insertIndex = currentDropZone.zone === 'right' ? newIndex + 1 : newIndex
+
+            // Create new order
+            const reordered = [...visibleTerminals]
+            const [removed] = reordered.splice(oldIndex, 1)
+            // Adjust insert index if we removed an item before it
+            const adjustedInsertIndex = oldIndex < insertIndex ? insertIndex - 1 : insertIndex
+            reordered.splice(adjustedInsertIndex, 0, removed)
+
+            // Preserve hidden terminals
+            const hiddenTerminals = storedTerminals.filter(t => t.isHidden)
+            const newOrder = [...reordered, ...hiddenTerminals]
+            reorderTerminals(newOrder)
+            console.log(`[SimpleTerminalApp] Reordered tabs: ${active.id} moved from ${oldIndex} to ${adjustedInsertIndex}`)
+          }
+          return
+        }
+      }
     }
   }
 
@@ -1361,7 +1588,7 @@ function SimpleTerminalApp() {
       {/* Tab Bar */}
       <DndContext
         sensors={sensors}
-        collisionDetection={pointerWithin}
+        collisionDetection={customCollisionDetection}
         onDragStart={handleDragStart}
         onDragOver={handleDragOver}
         onDragEnd={handleDragEnd}
@@ -1372,7 +1599,6 @@ function SimpleTerminalApp() {
         >
           <div className="tab-bar">
             {visibleTerminals.map(terminal => {
-              const isEdgeZoneActive = !!dropZoneState && dropZoneState.zone !== 'center' && dropZoneState.zone !== null
               return (
                 <SortableTab
                   key={terminal.id}
@@ -1385,7 +1611,7 @@ function SimpleTerminalApp() {
                   }}
                   dropZone={dropZoneState?.terminalId === terminal.id ? dropZoneState.zone : null}
                   isDraggedOver={dropZoneState?.terminalId === terminal.id}
-                  isEdgeZoneActive={isEdgeZoneActive}
+                  mousePosition={mousePosition}
                 />
               )
             })}
@@ -1482,6 +1708,7 @@ function SimpleTerminalApp() {
                     terminals={storedTerminals}
                     agents={webSocketAgents}
                     onClose={handleCloseTerminal}
+                    onPopOut={handlePopOutPane}
                     onCommand={handleCommand}
                     wsRef={wsRef}
                     terminalRef={terminalRef}

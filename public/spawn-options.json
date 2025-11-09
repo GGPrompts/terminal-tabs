@@ -11,7 +11,7 @@
       "defaultTransparency": 95,
       "defaultFontSize": 20,
       "defaultFontFamily": "'Fira Code', monospace",
-      "defaultBackground": "aurora-borealis"
+      "defaultBackground": "dark-neutral"
     },
     {
       "label": "Bash",
