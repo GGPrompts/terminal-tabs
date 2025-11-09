@@ -1,6 +1,40 @@
 {
   "spawnOptions": [
     {
+      "label": "TFE",
+      "command": "tfe",
+      "terminalType": "bash",
+      "workingDir": "~/projects",
+      "icon": "📁",
+      "description": "Terminal File Explorer",
+      "defaultTheme": "default",
+      "defaultTransparency": 95,
+      "defaultFontSize": 20,
+      "defaultFontFamily": "'Fira Code', monospace",
+      "defaultBackground": "aurora-borealis"
+    },
+    {
+      "label": "Bash",
+      "command": "",
+      "terminalType": "bash",
+      "icon": "💻",
+      "description": "Plain bash terminal",
+      "defaultTheme": "matrix",
+      "defaultTransparency": 90
+    },
+    {
+      "label": "Claude (skip permissions)",
+      "command": "claude --dangerously-skip-permissions",
+      "terminalType": "claude-code",
+      "icon": "⚡",
+      "description": "Claude Code with no permission prompts",
+      "defaultTheme": "amber",
+      "defaultTransparency": 100,
+      "defaultFontSize": 20,
+      "defaultFontFamily": "'JetBrains Mono', monospace",
+      "defaultBackground": "dark-neutral"
+    },
+    {
       "label": "TUI Classic Games",
       "command": "./classics",
       "terminalType": "bash",
@@ -14,26 +48,13 @@
       "defaultFontSize": 18
     },
     {
-      "label": "Bash",
-      "command": "",
-      "terminalType": "bash",
-      "icon": "💻",
-      "description": "Plain bash terminal",
-      "defaultTheme": "matrix",
-      "defaultTransparency": 90
-    },
-    {
-      "label": "TFE",
-      "command": "tfe",
-      "terminalType": "bash",
-      "workingDir": "~/projects",
-      "icon": "📁",
-      "description": "Terminal File Explorer",
-      "defaultTheme": "default",
-      "defaultTransparency": 95,
-      "defaultFontSize": 16,
-      "defaultFontFamily": "'Fira Code', monospace",
-      "defaultBackground": "synthwave-sunset"
+      "label": "Codex",
+      "command": "codex",
+      "terminalType": "codex",
+      "icon": "📚",
+      "description": "Codex AI assistant",
+      "defaultTheme": "amber",
+      "defaultTransparency": 100
     },
     {
       "label": "Tmuxplexer",
@@ -42,19 +63,11 @@
       "icon": "💻",
       "description": "tmux manager",
       "workingDir": "~/projects/tmuxplexer",
-      "defaultTheme": "github-dark",
+      "defaultTheme": "monokai",
       "defaultTransparency": 100,
-      "defaultFontFamily": "'JetBrains Mono', monospace",
-      "defaultFontSize": 16
-    },
-    {
-      "label": "Claude (skip permissions)",
-      "command": "claude --dangerously-skip-permissions",
-      "terminalType": "claude-code",
-      "icon": "⚡",
-      "description": "Claude Code with no permission prompts",
-      "defaultTheme": "amber",
-      "defaultTransparency": 100
+      "defaultFontFamily": "'Consolas', monospace",
+      "defaultFontSize": 18,
+      "defaultBackground": "dark-neutral"
     },
     {
       "label": "Claude Code",
@@ -71,15 +84,6 @@
       "terminalType": "opencode",
       "icon": "💜",
       "description": "OpenCode AI assistant",
-      "defaultTheme": "amber",
-      "defaultTransparency": 100
-    },
-    {
-      "label": "Codex",
-      "command": "codex",
-      "terminalType": "codex",
-      "icon": "📚",
-      "description": "Codex AI assistant",
       "defaultTheme": "amber",
       "defaultTransparency": 100
     },

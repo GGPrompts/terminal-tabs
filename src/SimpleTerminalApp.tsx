@@ -669,7 +669,7 @@ function SimpleTerminalApp() {
         background: terminal.background || option.defaultBackground || THEME_BACKGROUNDS[terminal.theme || 'default'] || 'dark-neutral',
         transparency: terminal.transparency ?? option.defaultTransparency,
         fontSize: terminal.fontSize ?? option.defaultFontSize ?? useSettingsStore.getState().terminalDefaultFontSize,
-        fontFamily: terminal.fontFamily ?? option.defaultFontFamily,
+        fontFamily: terminal.fontFamily ?? option.defaultFontFamily ?? useSettingsStore.getState().terminalDefaultFontFamily ?? 'monospace',
         size: { width: 800, height: 600 },
         useTmux: true, // Must be true for reconnection
         sessionName: terminal.sessionName, // CRITICAL: Use existing session name!
@@ -861,6 +861,7 @@ function SimpleTerminalApp() {
     terminalRef.current.updateBackground(background)
     // Save to this terminal's state (persisted in localStorage)
     updateTerminal(activeTerminal.id, { background })
+    // No refit needed - background is a React layer, not xterm.js
   }
 
   const handleTransparencyChange = (transparency: number) => {
@@ -869,6 +870,7 @@ function SimpleTerminalApp() {
     terminalRef.current.updateOpacity(opacity)
     // Save to this terminal's state (persisted in localStorage)
     updateTerminal(activeTerminal.id, { transparency })
+    // No refit needed - transparency is CSS opacity on React layer, not xterm.js
   }
 
   const handleFontFamilyChange = (fontFamily: string) => {
@@ -876,6 +878,12 @@ function SimpleTerminalApp() {
     terminalRef.current.updateFontFamily(fontFamily)
     // Save to this terminal's state (persisted in localStorage)
     updateTerminal(activeTerminal.id, { fontFamily })
+    // Refit after font family change (especially important for Claude Code/TUI apps)
+    setTimeout(() => {
+      if (terminalRef.current) {
+        terminalRef.current.refit()
+      }
+    }, 350)
   }
 
   // Compute dynamic background based on active terminal's background setting
@@ -1178,6 +1186,57 @@ function SimpleTerminalApp() {
             >
               ↺
             </button>
+
+            {/* Tmux Controls - only show for tmux sessions */}
+            {activeTerminal.sessionName && terminalRef.current && (
+              <>
+                <span style={{ marginLeft: '12px', marginRight: '6px', opacity: 0.6, fontSize: '0.85em' }}>
+                  tmux:
+                </span>
+                <button
+                  className="footer-control-btn"
+                  onClick={() => terminalRef.current?.sendKeys('\x02%')}
+                  title="Split Vertical (Ctrl+B %)"
+                >
+                  ⊞
+                </button>
+                <button
+                  className="footer-control-btn"
+                  onClick={() => terminalRef.current?.sendKeys('\x02"')}
+                  title="Split Horizontal (Ctrl+B &quot;)"
+                >
+                  ⊟
+                </button>
+                <button
+                  className="footer-control-btn"
+                  onClick={() => terminalRef.current?.sendKeys('\x02z')}
+                  title="Zoom Pane (Ctrl+B z)"
+                >
+                  🔍
+                </button>
+                <button
+                  className="footer-control-btn"
+                  onClick={() => terminalRef.current?.sendKeys('\x02c')}
+                  title="New Window (Ctrl+B c)"
+                >
+                  ➕
+                </button>
+                <button
+                  className="footer-control-btn"
+                  onClick={() => terminalRef.current?.sendKeys('\x02p')}
+                  title="Previous Window (Ctrl+B p)"
+                >
+                  ◀
+                </button>
+                <button
+                  className="footer-control-btn"
+                  onClick={() => terminalRef.current?.sendKeys('\x02n')}
+                  title="Next Window (Ctrl+B n)"
+                >
+                  ▶
+                </button>
+              </>
+            )}
 
             {/* Customize Panel Toggle */}
             <button

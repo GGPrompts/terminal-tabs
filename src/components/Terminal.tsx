@@ -228,12 +228,10 @@ export const Terminal = React.forwardRef<any, TerminalProps>(
         });
       }
 
-      // Load WebGL addon for better performance. Avoid WebGL for interactive TUIs moved via portals
-      // (e.g., MC in bash, gemini) to prevent context loss/flicker on reparent.
-      // Also disable for TUI tools as WebGL doesn't render box-drawing characters properly
-      const useWebGL = !["opencode", "bash", "gemini", "tui-tool"].includes(
-        agent.terminalType,
-      ) && !isTUITool;
+      // Disable WebGL for all terminals - canvas renderer handles transparency properly
+      // WebGL renders ANSI black backgrounds as solid, breaking Claude Code UI transparency
+      // Can re-enable if performance issues arise, but canvas works great for now
+      const useWebGL = false;
       if (useWebGL) {
         try {
           const webglAddon = new WebglAddon();
@@ -1184,6 +1182,11 @@ export const Terminal = React.forwardRef<any, TerminalProps>(
           }
         }
       },
+      sendKeys: (keys: string) => {
+        if (xtermRef.current) {
+          xtermRef.current.write(keys);
+        }
+      },
     }));
 
     return (
@@ -1311,6 +1314,58 @@ export const Terminal = React.forwardRef<any, TerminalProps>(
                   </div>
                 )}
               </div>
+
+              {/* Tmux controls - show before maximize/close */}
+              {agent.sessionName && (
+                <>
+                  <span style={{ marginRight: '8px', opacity: 0.6, fontSize: '0.85em' }}>
+                    tmux:
+                  </span>
+                  <button
+                    className="terminal-action-btn"
+                    onClick={() => xtermRef.current?.write('\x02%')}
+                    title="Split Vertical (Ctrl+B %)"
+                  >
+                    ⊞
+                  </button>
+                  <button
+                    className="terminal-action-btn"
+                    onClick={() => xtermRef.current?.write('\x02"')}
+                    title="Split Horizontal (Ctrl+B &quot;)"
+                  >
+                    ⊟
+                  </button>
+                  <button
+                    className="terminal-action-btn"
+                    onClick={() => xtermRef.current?.write('\x02z')}
+                    title="Zoom Pane (Ctrl+B z)"
+                  >
+                    🔍
+                  </button>
+                  <button
+                    className="terminal-action-btn"
+                    onClick={() => xtermRef.current?.write('\x02c')}
+                    title="New Window (Ctrl+B c)"
+                  >
+                    ➕
+                  </button>
+                  <button
+                    className="terminal-action-btn"
+                    onClick={() => xtermRef.current?.write('\x02p')}
+                    title="Previous Window (Ctrl+B p)"
+                  >
+                    ◀
+                  </button>
+                  <button
+                    className="terminal-action-btn"
+                    onClick={() => xtermRef.current?.write('\x02n')}
+                    title="Next Window (Ctrl+B n)"
+                  >
+                    ▶
+                  </button>
+                </>
+              )}
+
               <button
                 className="terminal-action-btn"
                 onClick={() => setIsMaximized(!isMaximized)}
@@ -1338,6 +1393,63 @@ export const Terminal = React.forwardRef<any, TerminalProps>(
             <span className="status-text">{agent.status}</span>
             {agent.pid && (
               <span className="terminal-pid">PID: {agent.pid}</span>
+            )}
+
+            {/* Tmux controls - only show for tmux sessions */}
+            {agent.sessionName && (
+              <>
+                <span style={{ marginLeft: 'auto', marginRight: '8px', opacity: 0.6, fontSize: '0.85em' }}>
+                  tmux:
+                </span>
+                <button
+                  className="terminal-action-btn"
+                  onClick={() => xtermRef.current?.write('\x02%')} // Ctrl+B %
+                  title="Split Vertical (Ctrl+B %)"
+                  style={{ padding: '2px 6px', fontSize: '0.9em' }}
+                >
+                  ⊞
+                </button>
+                <button
+                  className="terminal-action-btn"
+                  onClick={() => xtermRef.current?.write('\x02"')} // Ctrl+B "
+                  title="Split Horizontal (Ctrl+B &quot;)"
+                  style={{ padding: '2px 6px', fontSize: '0.9em' }}
+                >
+                  ⊟
+                </button>
+                <button
+                  className="terminal-action-btn"
+                  onClick={() => xtermRef.current?.write('\x02z')} // Ctrl+B z
+                  title="Zoom Pane (Ctrl+B z)"
+                  style={{ padding: '2px 6px', fontSize: '0.9em' }}
+                >
+                  🔍
+                </button>
+                <button
+                  className="terminal-action-btn"
+                  onClick={() => xtermRef.current?.write('\x02c')} // Ctrl+B c
+                  title="New Window (Ctrl+B c)"
+                  style={{ padding: '2px 6px', fontSize: '0.9em' }}
+                >
+                  ➕
+                </button>
+                <button
+                  className="terminal-action-btn"
+                  onClick={() => xtermRef.current?.write('\x02p')} // Ctrl+B p
+                  title="Previous Window (Ctrl+B p)"
+                  style={{ padding: '2px 6px', fontSize: '0.9em' }}
+                >
+                  ◀
+                </button>
+                <button
+                  className="terminal-action-btn"
+                  onClick={() => xtermRef.current?.write('\x02n')} // Ctrl+B n
+                  title="Next Window (Ctrl+B n)"
+                  style={{ padding: '2px 6px', fontSize: '0.9em' }}
+                >
+                  ▶
+                </button>
+              </>
             )}
           </div>
         )}

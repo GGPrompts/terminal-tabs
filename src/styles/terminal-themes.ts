@@ -1,3 +1,6 @@
+// Import Claude Code optimized palettes
+import { claudeCodePalettes, type ClaudeCodePalette } from './claude-code-themes';
+
 // Terminal Theme Definitions with enhanced visual effects
 export interface TerminalTheme {
   name: string;
@@ -11,11 +14,47 @@ export interface TerminalTheme {
   letterSpacing?: string; // Terminal letter spacing
 }
 
+// Helper to convert ClaudeCodePalette to TerminalTheme format
+function claudeThemeToTerminal(palette: ClaudeCodePalette, cssEffects: string = ''): TerminalTheme {
+  return {
+    name: palette.name,
+    xterm: {
+      // Nearly transparent background - CSS will override to fully transparent, but this helps WebGL
+      background: 'rgba(0, 0, 0, 0.01)',
+      foreground: palette.foreground,
+      cursor: palette.cursor,
+      cursorAccent: palette.black,
+      selectionBackground: palette.selection,
+      selectionForeground: palette.foreground,
+
+      black: palette.black,
+      red: palette.red,
+      green: palette.green,
+      yellow: palette.yellow,
+      blue: palette.blue,
+      magenta: palette.magenta,
+      cyan: palette.cyan,
+      white: palette.white,
+
+      brightBlack: palette.brightBlack,
+      brightRed: palette.brightRed,
+      brightGreen: palette.brightGreen,
+      brightYellow: palette.brightYellow,
+      brightBlue: palette.brightBlue,
+      brightMagenta: palette.brightMagenta,
+      brightCyan: palette.brightCyan,
+      brightWhite: palette.brightWhite,
+    },
+    css: cssEffects,
+    glowColor: palette.cyan, // Use cyan for glow effects
+  };
+}
+
 export const terminalThemes: Record<string, TerminalTheme> = {
   default: {
     name: "Default",
     xterm: {
-      background: "rgba(10, 10, 15, 0.85)", // Dark neutral blue-grey
+      background: "rgba(0, 0, 0, 0.01)", // Nearly transparent - CSS overrides to fully transparent
       foreground: "#d4d4d4",
       cursor: "#ffffff",
       cursorAccent: "#000000",
@@ -45,7 +84,7 @@ export const terminalThemes: Record<string, TerminalTheme> = {
   cyberpunk: {
     name: "Cyberpunk Neon",
     xterm: {
-      background: "rgba(20, 0, 30, 0.85)", // Dark purple-black
+      background: "rgba(0, 0, 0, 0.01)", // Nearly transparent - CSS overrides to fully transparent
       foreground: "#00ffff",
       cursor: "#ff00ff",
       cursorAccent: "#000000",
@@ -78,7 +117,7 @@ export const terminalThemes: Record<string, TerminalTheme> = {
   retro: {
     name: "Retro Amber",
     xterm: {
-      background: "rgba(20, 15, 0, 0.85)", // Dark amber-black
+      background: "rgba(0, 0, 0, 0.01)", // Nearly transparent - CSS overrides to fully transparent
       foreground: "#ffb000",
       cursor: "#ffb000",
       cursorAccent: "#000000",
@@ -111,7 +150,7 @@ export const terminalThemes: Record<string, TerminalTheme> = {
   matrix: {
     name: "Matrix Rain",
     xterm: {
-      background: "rgba(0, 15, 0, 0.85)", // Dark green-black
+      background: "rgba(0, 0, 0, 0.01)", // Nearly transparent - CSS overrides to fully transparent
       foreground: "#00ff00",
       cursor: "#00ff00",
       cursorAccent: "#003300",
@@ -144,7 +183,7 @@ export const terminalThemes: Record<string, TerminalTheme> = {
   holographic: {
     name: "Holographic",
     xterm: {
-      background: "rgba(0, 20, 15, 0.85)", // Dark teal-black
+      background: "rgba(0, 0, 0, 0.01)", // Nearly transparent - CSS overrides to fully transparent
       foreground: "#00ff88",
       cursor: "#00ff88",
       cursorAccent: "#000000",
@@ -177,7 +216,7 @@ export const terminalThemes: Record<string, TerminalTheme> = {
   vaporwave: {
     name: "Vaporwave",
     xterm: {
-      background: "rgba(25, 0, 20, 0.85)", // Dark magenta-black
+      background: "rgba(0, 0, 0, 0.01)", // Nearly transparent - CSS overrides to fully transparent
       foreground: "#ff71ce",
       cursor: "#01cdfe",
       cursorAccent: "#05ffa1",
@@ -210,7 +249,7 @@ export const terminalThemes: Record<string, TerminalTheme> = {
   aurora: {
     name: "Aurora Borealis",
     xterm: {
-      background: "rgba(0, 15, 20, 0.85)", // Dark cyan-black
+      background: "rgba(0, 0, 0, 0.01)", // Nearly transparent - CSS overrides to fully transparent
       foreground: "#e0f7fa",
       cursor: "#80deea",
       cursorAccent: "#004d40",
@@ -247,7 +286,7 @@ export const terminalThemes: Record<string, TerminalTheme> = {
   synthwave: {
     name: "Synthwave",
     xterm: {
-      background: "rgba(25, 10, 20, 0.85)", // Dark purple-pink
+      background: "rgba(0, 0, 0, 0.01)", // Nearly transparent - CSS overrides to fully transparent
       foreground: "#f92aad",
       cursor: "#fdca40",
       cursorAccent: "#242038",
@@ -279,6 +318,43 @@ export const terminalThemes: Record<string, TerminalTheme> = {
     `,
     glowColor: "#f92aad",
   },
+
+  // ========================================
+  // Claude Code Optimized Themes
+  // ========================================
+
+  "claude-high-contrast": claudeThemeToTerminal(
+    claudeCodePalettes["claude-high-contrast"],
+    `text-shadow: 0 0 2px currentColor;`
+  ),
+
+  "claude-dracula": claudeThemeToTerminal(
+    claudeCodePalettes["claude-dracula"],
+    `text-shadow: 0 0 3px rgba(255, 121, 198, 0.3);`
+  ),
+
+  "claude-soft-ocean": claudeThemeToTerminal(
+    claudeCodePalettes["claude-soft-ocean"],
+    `text-shadow: 0 0 5px rgba(145, 215, 227, 0.2);`
+  ),
+
+  "claude-neon": claudeThemeToTerminal(
+    claudeCodePalettes["claude-neon"],
+    `text-shadow: 0 0 5px currentColor, 0 0 10px currentColor;
+     animation: neonPulse 2s ease-in-out infinite alternate;`
+  ),
+
+  "claude-amber-modern": claudeThemeToTerminal(
+    claudeCodePalettes["claude-amber-modern"],
+    `text-shadow: 0 0 2px #ffb86c, 0 0 5px #ff8800;
+     filter: contrast(1.1) brightness(1.05);`
+  ),
+
+  "claude-mono-green": claudeThemeToTerminal(
+    claudeCodePalettes["claude-mono-green"],
+    `text-shadow: 0 0 3px #5af78e, 0 0 8px #5af78e;
+     animation: matrixGlow 3s ease-in-out infinite;`
+  ),
 };
 
 // CSS Keyframe animations
@@ -353,15 +429,19 @@ export const terminalAnimations = `
 // Theme aliases - map intuitive names to actual theme keys
 const themeAliases: Record<string, string> = {
   // Intuitive name → actual key
-  "amber": "retro",                    // "amber" → "Retro Amber"
-  "green": "matrix",                   // "green" → "Matrix Rain"
+  "amber": "claude-amber-modern",      // "amber" → Claude Amber Modern (optimized for Claude Code)
+  "green": "claude-mono-green",        // "green" → Claude Mono Green (optimized)
   "purple": "cyberpunk",               // "purple" → "Cyberpunk Neon"
   "pink": "vaporwave",                 // "pink" → "Vaporwave Dreams"
   "blue": "holographic",               // "blue" → "Holographic"
-  "ocean": "deep-ocean",               // "ocean" → "Deep Ocean"
-  "dark": "github-dark",               // "dark" → "GitHub Dark"
-  "light": "solarized-light",          // "light" → "Solarized Light"
-  "solarized": "solarized-dark",       // "solarized" → "Solarized Dark"
+  "ocean": "claude-soft-ocean",        // "ocean" → Claude Soft Ocean (optimized)
+  "dark": "claude-high-contrast",      // "dark" → Claude High Contrast (best readability)
+  "dracula": "claude-dracula",         // "dracula" → Claude Dracula
+  "neon": "claude-neon",               // "neon" → Claude Neon (ultra-vibrant)
+
+  // Legacy aliases
+  "retro": "claude-amber-modern",      // Redirect old retro to new amber
+  "matrix": "claude-mono-green",       // Redirect old matrix to new mono green
 };
 
 // Get theme by terminal type or theme key
@@ -378,17 +458,17 @@ export function getThemeForTerminalType(
 
   // Otherwise use the terminal type mapping
   const themeMap: Record<string, string> = {
-    "claude-code": "holographic",
-    opencode: "synthwave",
+    "claude-code": "claude-high-contrast",  // Use optimized Claude Code theme
+    opencode: "claude-soft-ocean",          // Easy on eyes for long sessions
     orchestrator: "aurora",
     gemini: "vaporwave",
     "docker-ai": "cyberpunk",
-    bash: "matrix",
-    dashboard: "retro",
+    bash: "claude-mono-green",              // Modern matrix-style green
+    dashboard: "claude-amber-modern",       // Modern retro amber
     script: "cyberpunk",
   };
 
-  return terminalThemes[themeMap[resolvedKey] || "cyberpunk"];
+  return terminalThemes[themeMap[resolvedKey] || "claude-high-contrast"];
 }
 
 // Apply theme-specific CSS class
