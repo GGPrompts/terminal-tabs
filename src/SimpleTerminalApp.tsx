@@ -679,16 +679,27 @@ function SimpleTerminalApp() {
     updateTerminal(terminalId, {
       isDetached: false,
       windowId: currentWindowId,
-      status: 'spawning',  // Triggers reconnection logic
+      status: 'spawning',  // Will be updated to 'active' after reconnection
       lastActiveTime: Date.now()
     })
 
     // Set as active tab
     setActiveTerminal(terminalId)
 
-    // Reconnection will happen automatically via useWebSocketManager
-    // because status changed to 'spawning' and terminal has sessionName
-    console.log(`✅ Reattached terminal: ${terminal.name} to window ${currentWindowId}`)
+    // Explicitly trigger reconnection via handleReconnectTerminal
+    // This sends the spawn message to the backend to reconnect to tmux session
+    try {
+      await handleReconnectTerminal(terminal)
+      console.log(`✅ Reattached terminal: ${terminal.name} to window ${currentWindowId}`)
+    } catch (error) {
+      console.error('[handleReattachTab] Reconnection failed:', error)
+      // Revert state on failure
+      updateTerminal(terminalId, {
+        isDetached: true,
+        windowId: null,
+        status: 'active'
+      })
+    }
   }
 
   const handleTabClick = (terminalId: string) => {
