@@ -3,8 +3,8 @@
 ## 🚨 CURRENT STATUS
 
 **Date**: November 10, 2025
-**Version**: v1.2.2 (polish branch)
-**Branch**: `polish`
+**Version**: v1.3.0 (sessionmanager branch)
+**Branch**: `sessionmanager`
 
 ### What's Working 🎉
 - ✅ Terminal persistence & reconnection
@@ -15,16 +15,21 @@
 - ✅ Per-tab customization
 - ✅ Tab context menu (right-click)
 - ✅ Code quality improvements (-1,596 lines!)
+- ✅ **NEW: Orphaned session detection & adoption**
+- ✅ **NEW: Footer reorganization with per-terminal detach**
+- ✅ **NEW: Spawn menu Select All/Deselect All**
+- ✅ **NEW: Split tabs show both pane names**
+- ✅ **NEW: Mobile-optimized scrolling**
 
 **For completed features, see [CHANGELOG.md](CHANGELOG.md)**
 
 ---
 
-## 🎯 PRIORITY 1: Orphaned Session Detection & Adoption
+## ✅ PRIORITY 1: Orphaned Session Detection & Adoption [COMPLETED]
 
 **Priority**: Critical (Fixes reconnection issues + enables scriptable workflows)
 **Estimated Time**: 4-5 hours (6 phases)
-**Status**: Planning phase
+**Status**: ✅ **COMPLETED** - November 10, 2025
 
 ### The Problem
 
@@ -759,11 +764,11 @@ if (parentSplit && parentSplit.windowId !== currentWindowId) {
 
 ---
 
-## 🎯 PRIORITY 2: Footer Reorganization & Terminal-Specific Detach
+## ✅ PRIORITY 2: Footer Reorganization & Terminal-Specific Detach [COMPLETED]
 
 **Priority**: High (UX improvement + feature enhancement)
 **Estimated Time**: 2-3 hours
-**Status**: Planning phase
+**Status**: ✅ **COMPLETED** - November 10, 2025
 
 ### Goals
 

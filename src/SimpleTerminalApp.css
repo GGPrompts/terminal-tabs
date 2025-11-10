@@ -207,6 +207,25 @@
   cursor: pointer;
 }
 
+.header-stat.orphan-stat {
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.header-stat.orphan-stat.has-orphans {
+  color: rgba(255, 107, 107, 0.9);
+  background: rgba(255, 68, 68, 0.1);
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-weight: 600;
+}
+
+.header-stat.orphan-stat.has-orphans:hover {
+  color: rgba(255, 68, 68, 1);
+  background: rgba(255, 68, 68, 0.15);
+  text-shadow: 0 0 8px rgba(255, 68, 68, 0.4);
+  cursor: pointer;
+}
+
 .header-actions {
   display: flex;
   align-items: center;
@@ -312,6 +331,10 @@
   transition: margin-top 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   position: relative;
   z-index: 101; /* Above header (100) so header slides under tabs */
+
+  /* Mobile-friendly scrolling */
+  -webkit-overflow-scrolling: touch;  /* Smooth momentum scrolling on iOS/Safari */
+  scroll-behavior: smooth;             /* Smooth scrolling on all platforms */
 }
 
 /* When header is hidden, remove top margin */
@@ -339,7 +362,7 @@
   cursor: pointer;
   transition: all 0.2s ease;
   min-width: 120px;
-  max-width: 200px;
+  max-width: 280px;  /* Increased from 200px to accommodate split names */
   user-select: none;
 }
 
@@ -791,6 +814,34 @@
   color: rgba(255, 255, 255, 0.4);
 }
 
+/* Select All / Deselect All */
+.spawn-select-all {
+  padding: 8px 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.spawn-select-all label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.8);
+  user-select: none;
+}
+
+.spawn-select-all label:hover {
+  color: rgba(255, 255, 255, 1);
+}
+
+.spawn-select-all input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+  accent-color: #f59e0b;
+}
+
 /* Spawn Option with Checkbox */
 .spawn-checkbox {
   width: 18px;
@@ -1210,6 +1261,40 @@
   .tab {
     min-width: 100px;
     max-width: 150px;
+    padding: 12px 16px;  /* Larger touch targets */
+  }
+
+  /* Hide scrollbar on mobile for cleaner look */
+  .tab-bar::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* Larger tap targets for tab close button */
+  .tab-close {
+    width: 28px;
+    height: 28px;
+  }
+
+  /* Make header stats more touch-friendly */
+  .header-stats-container {
+    gap: 16px;  /* More spacing between stats */
+  }
+
+  .header-stat {
+    padding: 6px 10px;  /* Larger touch area */
+  }
+}
+
+@media (max-width: 480px) {
+  /* Extra small screens - even more compact */
+  .tab {
+    min-width: 90px;
+    max-width: 130px;
+    gap: 6px;
+  }
+
+  .tab-label {
+    font-size: 12px;
   }
 }
 

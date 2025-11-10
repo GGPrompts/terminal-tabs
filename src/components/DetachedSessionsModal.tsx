@@ -6,18 +6,25 @@ interface DetachedSessionsModalProps {
   isOpen: boolean
   onClose: () => void
   detachedSessions: StoredTerminal[]
+  orphanedSessions: string[]  // NEW: Array of tmux session names
   onReattach: (terminalIds: string[]) => void
   onKill: (terminalIds: string[]) => void
+  onAdoptOrphans: (sessionNames: string[]) => void  // NEW
+  onKillOrphans: (sessionNames: string[]) => void  // NEW
 }
 
 export function DetachedSessionsModal({
   isOpen,
   onClose,
   detachedSessions,
+  orphanedSessions,
   onReattach,
   onKill,
+  onAdoptOrphans,
+  onKillOrphans,
 }: DetachedSessionsModalProps) {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [orphanSelectedIds, setOrphanSelectedIds] = useState<Set<string>>(new Set())  // NEW
 
   // Close on Escape key
   useEffect(() => {
@@ -37,6 +44,7 @@ export function DetachedSessionsModal({
   useEffect(() => {
     if (!isOpen) {
       setSelectedIds(new Set())
+      setOrphanSelectedIds(new Set())  // NEW
     }
   }, [isOpen])
 
@@ -90,17 +98,55 @@ export function DetachedSessionsModal({
     }
   }
 
+  // NEW: Orphan handlers
+  const toggleOrphanSelection = (sessionName: string) => {
+    setOrphanSelectedIds(prev => {
+      const next = new Set(prev)
+      if (next.has(sessionName)) {
+        next.delete(sessionName)
+      } else {
+        next.add(sessionName)
+      }
+      return next
+    })
+  }
+
+  const handleAdoptSelected = () => {
+    if (orphanSelectedIds.size > 0) {
+      onAdoptOrphans(Array.from(orphanSelectedIds))
+      setOrphanSelectedIds(new Set())
+    }
+  }
+
+  const handleKillOrphansSelected = () => {
+    if (orphanSelectedIds.size > 0) {
+      if (confirm(`Kill ${orphanSelectedIds.size} selected orphan session(s)? This cannot be undone.`)) {
+        onKillOrphans(Array.from(orphanSelectedIds))
+        setOrphanSelectedIds(new Set())
+      }
+    }
+  }
+
+  const handleSelectAllOrphans = () => {
+    setOrphanSelectedIds(new Set(orphanedSessions))
+  }
+
   return (
     <div className="detached-modal-overlay" onClick={onClose}>
       <div className="detached-modal-content" onClick={e => e.stopPropagation()}>
         <div className="detached-modal-header">
-          <h2>📂 Detached Sessions</h2>
+          <h2>📂 Session Manager</h2>
           <button className="detached-close-btn" onClick={onClose}>
             ✕
           </button>
         </div>
 
-        <div className="detached-sessions-list">
+        {/* Detached Sessions Group */}
+        <div className="session-group">
+          <div className="session-group-header">
+            <span>⏸️  Detached Sessions ({detachedSessions.length})</span>
+          </div>
+          <div className="detached-sessions-list">
           {detachedSessions.length === 0 ? (
             <div className="detached-empty-state">
               <div className="detached-empty-icon">💤</div>
@@ -146,10 +192,10 @@ export function DetachedSessionsModal({
               </div>
             ))
           )}
-        </div>
+          </div>
 
-        {detachedSessions.length > 0 && (
-          <div className="detached-modal-actions">
+          {detachedSessions.length > 0 && (
+            <div className="detached-modal-actions">
             <button
               className="detached-bulk-btn reattach-bulk-btn"
               disabled={selectedIds.size === 0}
@@ -176,6 +222,79 @@ export function DetachedSessionsModal({
             >
               Cancel
             </button>
+            </div>
+          )}
+        </div>
+
+        {/* Orphaned Sessions Group */}
+        {orphanedSessions.length > 0 && (
+          <div className="session-group orphan-group">
+            <div className="session-group-header">
+              <span>🔴 Orphaned Sessions ({orphanedSessions.length})</span>
+            </div>
+            <div className="detached-sessions-list">
+              {orphanedSessions.map(sessionName => (
+                <div
+                  key={sessionName}
+                  className={`detached-session-item ${orphanSelectedIds.has(sessionName) ? 'selected' : ''}`}
+                >
+                  <input
+                    type="checkbox"
+                    className="detached-checkbox"
+                    checked={orphanSelectedIds.has(sessionName)}
+                    onChange={() => toggleOrphanSelection(sessionName)}
+                  />
+                  <span className="detached-icon">❓</span>
+                  <div className="detached-session-info">
+                    <div className="detached-name">{sessionName}</div>
+                    <div className="detached-details">
+                      Tmux session not in localStorage
+                    </div>
+                  </div>
+                  <button
+                    className="detached-action-btn adopt-btn"
+                    onClick={() => onAdoptOrphans([sessionName])}
+                    title="Adopt this session"
+                  >
+                    Adopt
+                  </button>
+                  <button
+                    className="detached-action-btn kill-btn"
+                    onClick={() => {
+                      if (confirm(`Kill session "${sessionName}"? This cannot be undone.`)) {
+                        onKillOrphans([sessionName])
+                      }
+                    }}
+                    title="Kill this session"
+                  >
+                    Kill
+                  </button>
+                </div>
+              ))}
+            </div>
+
+            <div className="detached-modal-actions">
+              <button
+                className="detached-bulk-btn"
+                onClick={handleSelectAllOrphans}
+              >
+                ✓ Select All
+              </button>
+              <button
+                className="detached-bulk-btn adopt-bulk-btn"
+                disabled={orphanSelectedIds.size === 0}
+                onClick={handleAdoptSelected}
+              >
+                🔄 Adopt Selected ({orphanSelectedIds.size})
+              </button>
+              <button
+                className="detached-bulk-btn kill-bulk-btn"
+                disabled={orphanSelectedIds.size === 0}
+                onClick={handleKillOrphansSelected}
+              >
+                ✕ Kill Selected ({orphanSelectedIds.size})
+              </button>
+            </div>
           </div>
         )}
       </div>

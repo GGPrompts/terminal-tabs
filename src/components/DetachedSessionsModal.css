@@ -213,3 +213,45 @@
 .cancel-btn:hover {
   background: rgba(255, 255, 255, 0.15);
 }
+
+/* Session Groups */
+.session-group {
+  margin-bottom: 16px;
+}
+
+.session-group-header {
+  padding: 12px 16px;
+  background: rgba(255, 255, 255, 0.05);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  font-size: 14px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.session-group-header span {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Orphan-specific styles */
+.orphan-group .detached-session-item.selected {
+  background: rgba(255, 107, 107, 0.15);
+  border-color: rgba(255, 107, 107, 0.3);
+}
+
+.orphan-group .detached-checkbox {
+  accent-color: #ff6b6b;
+}
+
+.adopt-btn:hover {
+  background: rgba(100, 255, 180, 0.2);
+  border-color: rgba(100, 255, 180, 0.4);
+  color: #80ffb4;
+}
+
+.adopt-bulk-btn:hover:not(:disabled) {
+  background: rgba(100, 255, 180, 0.2);
+  border-color: rgba(100, 255, 180, 0.4);
+  color: #80ffb4;
+}

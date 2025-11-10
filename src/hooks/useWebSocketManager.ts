@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useMemo } from 'react'
 import SimpleSpawnService from '../services/SimpleSpawnService'
 import { Terminal as StoredTerminal } from '../stores/simpleTerminalStore'
 import { Agent } from '../types'
@@ -43,6 +43,7 @@ interface SpawnOption {
  * @param removeTerminal - Function to remove a terminal
  * @param setActiveTerminal - Function to set active terminal
  * @param handleReconnectTerminal - Function to reconnect to existing terminal session
+ * @param onOrphansDetected - Optional callback when orphaned sessions are detected
  * @returns Object with webSocketAgents, connectionStatus, and setter
  */
 export function useWebSocketManager(
@@ -57,13 +58,39 @@ export function useWebSocketManager(
   updateTerminal: (id: string, updates: Partial<StoredTerminal>) => void,
   removeTerminal: (id: string) => void,
   setActiveTerminal: (id: string | null) => void,
-  handleReconnectTerminal: (terminal: StoredTerminal, option: SpawnOption) => Promise<void>
+  handleReconnectTerminal: (terminal: StoredTerminal, option: SpawnOption) => Promise<void>,
+  onOrphansDetected?: (orphans: string[]) => void
 ) {
   const [webSocketAgents, setWebSocketAgents] = useState<Agent[]>([])
   const [connectionStatus, setConnectionStatus] = useState<'connected' | 'disconnected' | 'connecting'>('disconnected')
   const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [reconnectAttempts, setReconnectAttempts] = useState(0)
   const processedAgentIds = useRef<Set<string>>(new Set())
+
+  // Track active tmux sessions from backend
+  const [activeSessions, setActiveSessions] = useState<string[]>([])
+
+  // Compute orphaned sessions - tmux sessions NOT in localStorage
+  const orphanedSessions = useMemo(() => {
+    // Get all session names from stored terminals
+    const storedSessions = new Set(
+      storedTerminals
+        .filter(t => t.sessionName)
+        .map(t => t.sessionName)
+    )
+
+    // Find tmux sessions with tt- prefix that are NOT in localStorage
+    return activeSessions.filter(session =>
+      session.startsWith('tt-') && !storedSessions.has(session)
+    )
+  }, [activeSessions, storedTerminals])
+
+  // Notify parent when orphans change
+  useEffect(() => {
+    if (onOrphansDetected) {
+      onOrphansDetected(orphanedSessions)
+    }
+  }, [orphanedSessions, onOrphansDetected])
 
   // Clear all agentIds on mount - they're always stale after page refresh
   const hasHydrated = useRef(false)
@@ -303,15 +330,18 @@ export function useWebSocketManager(
 
       case 'tmux-sessions-list':
         if (message.data && message.data.sessions) {
-          const activeSessions = new Set(message.data.sessions)
+          const activeSessionsSet = new Set(message.data.sessions)
           const currentSpawnOptions = spawnOptionsRef.current
+
+          // Update state with active sessions for orphan detection
+          setActiveSessions(message.data.sessions)
 
           // Consider it "initial load" if within 30 seconds of page load
           const timeSincePageLoad = Date.now() - pageLoadTime.current
           const isInitialLoadPeriod = timeSincePageLoad < 30000
           const isFirstQuery = !hasQueriedSessions.current
 
-          console.log('[useWebSocketManager] 📋 Active tmux sessions:', Array.from(activeSessions))
+          console.log('[useWebSocketManager] 📋 Active tmux sessions:', Array.from(activeSessionsSet))
           console.log(`[useWebSocketManager] Mode: ${isInitialLoadPeriod ? 'INITIAL LOAD PERIOD (will reconnect)' : 'HEALTH CHECK (cleanup only)'}, timeSincePageLoad: ${timeSincePageLoad}ms`)
 
           // Track which sessions we've started reconnecting (prevent duplicates)
@@ -320,19 +350,19 @@ export function useWebSocketManager(
           let removeCount = 0
 
           // Process stored terminals
-          console.log(`[useWebSocketManager] 🔍 Checking ${storedTerminals.length} stored terminals against ${activeSessions.size} tmux sessions`)
+          console.log(`[useWebSocketManager] 🔍 Checking ${storedTerminals.length} stored terminals against ${activeSessionsSet.size} tmux sessions`)
 
           storedTerminals.forEach(terminal => {
             // Log each terminal we're checking
             if (terminal.sessionName) {
-              const inTmux = activeSessions.has(terminal.sessionName)
+              const inTmux = activeSessionsSet.has(terminal.sessionName)
               const terminalWindow = terminal.windowId || 'main'
               const isCurrentWindow = terminalWindow === currentWindowId
 
               console.log(`[useWebSocketManager]   Terminal: ${terminal.name} (${terminal.sessionName}) - inTmux: ${inTmux}, window: ${terminalWindow}, current: ${isCurrentWindow}, status: ${terminal.status}, agentId: ${terminal.agentId}`)
             }
 
-            if (terminal.sessionName && activeSessions.has(terminal.sessionName)) {
+            if (terminal.sessionName && activeSessionsSet.has(terminal.sessionName)) {
               // Session exists in tmux
 
               // Check if terminal needs connection

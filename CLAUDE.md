@@ -269,6 +269,156 @@ If popout windows show blank terminals:
 
 ---
 
+## 🔄 External Session Integration
+
+**NEW in v1.3.0** - Adopt external tmux sessions created outside Tabz!
+
+### The Problem This Solves
+
+You can now create tmux sessions from:
+- CLI scripts (setup-dev-environment.sh)
+- TUI apps like tmuxplexer
+- Manual tmux commands
+- Remote SSH sessions
+
+...and adopt them as full Tabz tabs with the Session Manager!
+
+### How It Works
+
+1. **Create sessions with `tt-` prefix:**
+   ```bash
+   tmux new -s tt-bash-mywork
+   tmux new -s tt-cc-review
+   tmux new -s tt-tfe-explore
+   ```
+
+2. **Tabz detects orphans:**
+   - Header shows **O: 3** (orphan count)
+   - Click **O: 3** or right-click → "Session Manager"
+
+3. **Adopt in UI:**
+   - Select sessions with checkboxes
+   - Click "🔄 Adopt Selected" → Becomes full Tabz tabs
+   - All customization features work (themes, fonts, etc.)
+
+### Naming Convention (Auto-Detection)
+
+Tabz infers terminal type from session name prefix:
+
+| Prefix | Terminal Type | Example |
+|--------|--------------|---------|
+| `tt-bash-*` | Bash | `tt-bash-api` → 🔧 Bash Api |
+| `tt-cc-*` | Claude Code | `tt-cc-main` → 🤖 Cc Main |
+| `tt-tfe-*` | TFE | `tt-tfe-explore` → 🎨 Tfe Explore |
+| `tt-tui-*` | TUI Tool | `tt-tui-radio` → 📟 Tui Radio |
+| `tt-lg-*` | LazyGit | `tt-lg-repo` → 🌿 Lg Repo |
+
+**Friendly names:** Session names are auto-converted to title case (e.g., `tt-bash-api-server` → "Bash Api Server")
+
+### Example Workflows
+
+#### 1. Development Environment Setup
+
+```bash
+#!/bin/bash
+# setup-dev-environment.sh
+
+# Create 10 tmux sessions with tt- prefix
+tmux new -d -s tt-cc-main "claude"
+tmux new -d -s tt-bash-api "cd ~/api && npm run dev"
+tmux new -d -s tt-bash-frontend "cd ~/frontend && npm start"
+tmux new -d -s tt-bash-db "docker-compose up"
+tmux new -d -s tt-tfe-explore "tfe ~/project"
+tmux new -d -s tt-bash-logs "tail -f /var/log/app.log"
+tmux new -d -s tt-bash-test "npm test -- --watch"
+tmux new -d -s tt-cc-review "claude --prompt 'review mode'"
+tmux new -d -s tt-bash-monitor "htop"
+tmux new -d -s tt-tui-games "tui-classics"
+
+echo "✅ Created 10 sessions. Open Tabz → O: 10 → Select All → Adopt!"
+```
+
+**Then in Tabz:**
+1. Header shows **O: 10**
+2. Click **O: 10** → Opens Session Manager
+3. Click **✓ Select All**
+4. Click **🔄 Adopt Selected (10)**
+5. **BOOM - 10 tabs appear instantly!**
+
+#### 2. tmuxplexer Integration
+
+```bash
+# In tmuxplexer TUI, create workspace
+tmux new -s tt-bash-api "cd ~/api && npm run dev"
+tmux new -s tt-bash-frontend "cd ~/frontend && npm start"
+tmux new -s tt-cc-main "cd ~/project && claude"
+
+# Switch to Tabz browser window
+# O: 3 appears in header → Adopt all 3 → Full UI control!
+```
+
+#### 3. CLI Aliases for Power Users
+
+```bash
+# Add to ~/.bashrc or ~/.zshrc
+alias spawn-claude="tmux new -d -s tt-cc-$(date +%s) claude"
+alias spawn-bash="tmux new -d -s tt-bash-$(date +%s)"
+alias spawn-tfe="tmux new -d -s tt-tfe-$(date +%s) tfe"
+
+# Usage: spawn-claude, then adopt in Tabz
+```
+
+#### 4. Quick Microservices Management
+
+```bash
+# Start all microservices
+tmux new -d -s tt-bash-auth-service "cd ~/services/auth && npm start"
+tmux new -d -s tt-bash-api-gateway "cd ~/services/api && npm start"
+tmux new -d -s tt-bash-db-service "cd ~/services/db && npm start"
+tmux new -d -s tt-bash-logs-service "cd ~/services/logs && npm start"
+
+# Adopt all 4 in Tabz → Manage in UI
+```
+
+### Use Cases
+
+- **🎮 TUI app integration** - Create complex layouts in TUI, manage in UI
+- **📜 CLI scripting** - Spawn 10+ sessions, adopt in one click
+- **🔬 Multi-agent workflows** - Spawn specialized Claude instances via script
+- **⚙️ Development automation** - One command = full dev environment
+- **🐳 Microservices management** - Each service in a tab
+- **🌐 Remote sessions** - SSH into server, create sessions, adopt locally (if backend can reach)
+
+### Session Manager UI
+
+```
+┌─────────────────────────────────────────────────────┐
+│ Session Manager                           [Refresh] │
+├─────────────────────────────────────────────────────┤
+│ ⏸️  Detached Sessions (2)              [Collapse ▼] │
+│   🤖 Claude Code (tt-cc-ll8)                        │
+│   🎨 TFE (tt-tfe-abc)                               │
+│                                                      │
+│ 🔴 Orphaned Sessions (5)               [Collapse ▼] │
+│   ☑ tt-bash-api-server                              │
+│   ☑ tt-bash-frontend                                │
+│   ☑ tt-cc-main                                      │
+│   ☑ tt-tfe-explore                                  │
+│   ☑ tt-tui-radio                                    │
+│                                                      │
+│   [✓ Select All] [🔄 Adopt Selected (5)] [✕ Kill]  │
+└─────────────────────────────────────────────────────┘
+```
+
+**Benefits:**
+- ✅ Script-based spawning (no UI clicking required)
+- ✅ Bulk adoption (10 sessions in 1 click)
+- ✅ Bi-directional workflow (CLI → UI or UI → CLI)
+- ✅ Perfect for automation and complex setups
+- ✅ Unique feature - **no other terminal manager has this!**
+
+---
+
 ## 🔧 Configuration
 
 ### spawn-options.json

@@ -181,6 +181,24 @@ function SortableTab({ terminal, isActive, onActivate, onClose, onContextMenu, d
     )
   }
 
+  // Get display name - combine pane names for splits
+  const getTabDisplayName = () => {
+    // Check if this is a split terminal
+    if (terminal.splitLayout && terminal.splitLayout.type !== 'single' && terminal.splitLayout.panes.length > 0) {
+      // Get names from both panes
+      const paneNames = terminal.splitLayout.panes.map(pane => {
+        const paneTerminal = allTerminals.find(t => t.id === pane.terminalId)
+        return paneTerminal?.name || 'Terminal'
+      })
+
+      // Combine names with compact separator (middle dot)
+      return paneNames.join(' · ')
+    }
+
+    // Regular single terminal
+    return terminal.name
+  }
+
   return (
     <div
       ref={setNodeRef}
@@ -193,7 +211,7 @@ function SortableTab({ terminal, isActive, onActivate, onClose, onContextMenu, d
       {...listeners}
     >
       {renderTabIcon()}
-      <span className="tab-label">{terminal.name}</span>
+      <span className="tab-label">{getTabDisplayName()}</span>
 
       {/* Only show buttons for non-detached tabs */}
       {!terminal.isDetached && (
@@ -240,6 +258,9 @@ function SimpleTerminalApp() {
   const [showSettings, setShowSettings] = useState(false)
   const [showDetachedModal, setShowDetachedModal] = useState(false)
   const [headerVisible, setHeaderVisible] = useState(true)
+
+  // Orphaned sessions - tmux sessions not in localStorage
+  const [orphanedSessions, setOrphanedSessions] = useState<string[]>([])
 
   // Settings
   const { useTmux, updateSettings } = useSettingsStore()
@@ -465,7 +486,8 @@ function SimpleTerminalApp() {
     updateTerminal,
     removeTerminal,
     setActiveTerminal,
-    handleReconnectTerminal
+    handleReconnectTerminal,
+    setOrphanedSessions // Callback for orphan detection
   )
 
   // Merge WebSocket agents with stored terminals
@@ -659,6 +681,86 @@ function SimpleTerminalApp() {
     }
   }
 
+  // Detach terminal with split collapse support (for footer detach button)
+  const handleDetachTerminal = async (terminalId: string) => {
+    const terminal = storedTerminals.find(t => t.id === terminalId)
+    if (!terminal?.sessionName) {
+      console.warn('[handleDetachTerminal] Terminal has no session, cannot detach')
+      return
+    }
+
+    console.log(`⊟ Detaching terminal: ${terminal.name} (${terminal.sessionName})`)
+
+    // 1. Detach from tmux via API
+    try {
+      const response = await fetch(`http://localhost:8127/api/tmux/detach/${terminal.sessionName}`, {
+        method: 'POST'
+      })
+
+      if (!response.ok) {
+        throw new Error(`Failed to detach: ${response.statusText}`)
+      }
+    } catch (error) {
+      console.error('[handleDetachTerminal] Error detaching from tmux:', error)
+      alert('Failed to detach terminal. Check backend logs.')
+      return
+    }
+
+    // 2. Update terminal state: mark as detached, clear windowId (global)
+    updateTerminal(terminalId, {
+      isDetached: true,
+      windowId: undefined,  // Make global, not window-scoped
+      lastActiveTime: Date.now(),
+      lastAttachedWindowId: currentWindowId,
+      agentId: undefined  // Clear WebSocket agent ID
+    })
+
+    // 3. Handle split collapse (REUSE POPOUT LOGIC!)
+    const parentSplit = storedTerminals.find(t =>
+      t.splitLayout?.type !== 'single' &&
+      t.splitLayout?.panes?.some(p => p.terminalId === terminalId)
+    )
+
+    if (parentSplit && parentSplit.splitLayout) {
+      console.log('[handleDetachTerminal] Terminal is in split, collapsing...')
+
+      // Find remaining pane
+      const remainingPane = parentSplit.splitLayout.panes?.find(
+        p => p.terminalId !== terminalId
+      )
+
+      if (remainingPane) {
+        // Collapse split - clear layout on container
+        updateTerminal(parentSplit.id, {
+          splitLayout: { type: 'single', panes: [] }
+        })
+
+        // Unhide remaining pane
+        updateTerminal(remainingPane.terminalId, {
+          isHidden: false
+        })
+
+        // Set remaining pane as active
+        setActiveTerminal(remainingPane.terminalId)
+        setFocusedTerminal(remainingPane.terminalId)
+
+        console.log('[handleDetachTerminal] ✅ Split collapsed, remaining pane promoted')
+      } else {
+        // No remaining pane - close container
+        console.log('[handleDetachTerminal] No remaining pane, closing container')
+        removeTerminal(parentSplit.id)
+      }
+    } else {
+      // Not in split - just switch to another tab if needed
+      if (activeTerminalId === terminalId) {
+        const nextTab = visibleTerminals.find(t => t.id !== terminalId && !t.isDetached)
+        setActiveTerminal(nextTab?.id || null)
+      }
+    }
+
+    console.log(`✅ Detached terminal: ${terminal.name}`)
+  }
+
   const handleReattachTab = async (terminalId: string) => {
     const terminal = storedTerminals.find(t => t.id === terminalId)
     if (!terminal?.sessionName || !terminal.isDetached) {
@@ -733,6 +835,85 @@ function SimpleTerminalApp() {
         removeTerminal(terminalId)
       } catch (error) {
         console.error(`Failed to kill session ${terminal.sessionName}:`, error)
+      }
+    }
+
+    setShowDetachedModal(false)
+  }
+
+  // Adopt orphaned tmux sessions (external sessions not in localStorage)
+  const handleAdoptOrphans = async (sessionNames: string[]) => {
+    const API_URL = 'http://localhost:8127'
+    console.log(`🔄 Adopting ${sessionNames.length} orphaned sessions...`)
+
+    for (const sessionName of sessionNames) {
+      // Infer terminal type from prefix
+      const terminalType = sessionName.startsWith('tt-cc-') ? 'claude-code'
+                         : sessionName.startsWith('tt-bash-') ? 'bash'
+                         : sessionName.startsWith('tt-tfe-') ? 'tui-tool'
+                         : sessionName.startsWith('tt-tui-') ? 'tui-tool'
+                         : sessionName.startsWith('tt-lg-') ? 'lazygit'
+                         : 'bash'  // default
+
+      // Find spawn option for this type
+      const option = spawnOptions.find(opt => opt.terminalType === terminalType)
+      if (!option) {
+        console.warn(`No spawn option for type: ${terminalType}`)
+        continue
+      }
+
+      // Generate friendly name from session name (tt-bash-api → Bash Api)
+      const friendlyName = sessionName
+        .replace(/^tt-/, '')
+        .replace(/-/g, ' ')
+        .replace(/\b\w/g, (l: string) => l.toUpperCase()) // Capitalize words
+
+      // Create terminal in localStorage
+      const newTerminal: StoredTerminal = {
+        id: `terminal-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        name: friendlyName,
+        terminalType,
+        icon: option.icon,
+        sessionName,
+        status: 'spawning',
+        windowId: currentWindowId,
+        createdAt: Date.now(),
+        theme: option.defaultTheme || 'default',
+        transparency: option.defaultTransparency || 85,
+        background: option.defaultBackground || 'dark-neutral',
+        fontSize: option.defaultFontSize || 16,
+        fontFamily: option.defaultFontFamily || "'Berkeley Mono', monospace",
+        command: option.command,
+        workingDir: option.workingDir || '~',
+      }
+
+      addTerminal(newTerminal)
+
+      // Trigger reconnection
+      try {
+        await handleReconnectTerminal(newTerminal, option)
+        console.log(`✅ Adopted session: ${sessionName} as "${friendlyName}"`)
+      } catch (error) {
+        console.error(`Failed to reconnect to ${sessionName}:`, error)
+      }
+    }
+
+    setShowDetachedModal(false)
+    console.log(`✅ Adopted ${sessionNames.length} orphaned sessions`)
+  }
+
+  // Kill orphaned tmux sessions
+  const handleKillOrphans = async (sessionNames: string[]) => {
+    const API_URL = 'http://localhost:8127'
+
+    for (const sessionName of sessionNames) {
+      try {
+        await fetch(`${API_URL}/api/tmux/kill/${sessionName}`, {
+          method: 'POST'
+        })
+        console.log(`✅ Killed orphan: ${sessionName}`)
+      } catch (error) {
+        console.error(`Failed to kill ${sessionName}:`, error)
       }
     }
 
@@ -1345,7 +1526,7 @@ function SimpleTerminalApp() {
           </button>
         </div>
 
-        {/* Header Stats - Active/Detached counts */}
+        {/* Header Stats - Active/Detached/Orphaned counts */}
         <div className="header-stats-container">
           <span className="header-stat active-stat" title="Active terminals">
             A: {storedTerminals.filter(t => !t.isDetached && !t.isHidden).length}
@@ -1357,6 +1538,14 @@ function SimpleTerminalApp() {
             style={{ cursor: detachedSessions.length > 0 ? 'pointer' : 'default' }}
           >
             D: {detachedSessions.length}
+          </span>
+          <span
+            className={`header-stat orphan-stat ${orphanedSessions.length > 0 ? 'has-orphans' : ''}`}
+            title={orphanedSessions.length > 0 ? "Orphaned tmux sessions (click to adopt)" : "No orphaned sessions"}
+            onClick={() => orphanedSessions.length > 0 && setShowDetachedModal(true)}
+            style={{ cursor: orphanedSessions.length > 0 ? 'pointer' : 'default' }}
+          >
+            O: {orphanedSessions.length}
           </span>
         </div>
 
@@ -1470,9 +1659,50 @@ function SimpleTerminalApp() {
             />
           </div>
 
+          {/* Select All / Deselect All - only show when NOT in split mode */}
+          {!splitMode.active && (() => {
+            const filteredOptions = spawnOptions
+              .map((option, idx) => ({ option, idx }))
+              .filter(({ option }) => {
+                if (!spawnSearchText) return true
+                const searchLower = spawnSearchText.toLowerCase()
+                return (
+                  option.label.toLowerCase().includes(searchLower) ||
+                  option.description?.toLowerCase().includes(searchLower) ||
+                  option.command?.toLowerCase().includes(searchLower)
+                )
+              })
+
+            const filteredIndices = filteredOptions.map(({ idx }) => idx)
+            const allSelected = filteredIndices.length > 0 && filteredIndices.every(idx => selectedSpawnOptions.has(idx))
+
+            return (
+              <div className="spawn-select-all">
+                <label>
+                  <input
+                    type="checkbox"
+                    checked={allSelected}
+                    onChange={() => {
+                      const newSelected = new Set(selectedSpawnOptions)
+                      if (allSelected) {
+                        // Deselect all filtered
+                        filteredIndices.forEach(idx => newSelected.delete(idx))
+                      } else {
+                        // Select all filtered
+                        filteredIndices.forEach(idx => newSelected.add(idx))
+                      }
+                      setSelectedSpawnOptions(newSelected)
+                    }}
+                  />
+                  <span>{allSelected ? 'Deselect All' : 'Select All'} ({filteredOptions.length})</span>
+                </label>
+              </div>
+            )
+          })()}
+
           <div className="spawn-menu-list">
-            {/* Detached Sessions Option - Only show when there are detached sessions */}
-            {detachedSessions.length > 0 && !splitMode.active && (
+            {/* Session Manager - Show when there are detached OR orphaned sessions */}
+            {(detachedSessions.length > 0 || orphanedSessions.length > 0) && !splitMode.active && (
               <div
                 className="spawn-option detached-option"
                 onClick={() => {
@@ -1482,8 +1712,17 @@ function SimpleTerminalApp() {
               >
                 <span className="spawn-icon">📂</span>
                 <div className="spawn-info">
-                  <div className="spawn-label">Detached Sessions ({detachedSessions.length})</div>
-                  <div className="spawn-description">Reattach orphaned tmux sessions</div>
+                  <div className="spawn-label">
+                    Session Manager
+                    {detachedSessions.length > 0 && orphanedSessions.length > 0 && ` (${detachedSessions.length + orphanedSessions.length})`}
+                    {detachedSessions.length > 0 && orphanedSessions.length === 0 && ` (${detachedSessions.length} detached)`}
+                    {detachedSessions.length === 0 && orphanedSessions.length > 0 && ` (${orphanedSessions.length} orphaned)`}
+                  </div>
+                  <div className="spawn-description">
+                    {detachedSessions.length > 0 && orphanedSessions.length > 0 && 'Manage detached & orphaned sessions'}
+                    {detachedSessions.length > 0 && orphanedSessions.length === 0 && 'Reattach detached sessions'}
+                    {detachedSessions.length === 0 && orphanedSessions.length > 0 && 'Adopt orphaned tmux sessions'}
+                  </div>
                 </div>
               </div>
             )}
@@ -1662,6 +1901,7 @@ function SimpleTerminalApp() {
       {displayTerminal && displayAgent && (
         <div className="app-footer">
           <div className="footer-left">
+            {/* Terminal Info */}
             <div className="footer-terminal-info">
               <span className="footer-terminal-icon">
                 {displayTerminal.icon || '💻'}
@@ -1673,35 +1913,8 @@ function SimpleTerminalApp() {
               )}
             </div>
 
+            {/* Terminal Controls */}
             <div className="footer-controls">
-              {/* Font Size Controls */}
-              <button
-                className="footer-control-btn"
-                onClick={() => handleFontSizeChange(-1)}
-                title="Decrease font size"
-                disabled={!displayTerminal.fontSize || displayTerminal.fontSize <= 10}
-              >
-                −
-              </button>
-              <span className="font-size-display">{displayTerminal.fontSize || useSettingsStore.getState().terminalDefaultFontSize}px</span>
-              <button
-                className="footer-control-btn"
-                onClick={() => handleFontSizeChange(1)}
-                title="Increase font size"
-                disabled={!!displayTerminal.fontSize && displayTerminal.fontSize >= 24}
-              >
-                +
-              </button>
-
-              {/* Reset to Defaults Button */}
-              <button
-                className="footer-control-btn"
-                onClick={handleResetToDefaults}
-                title="Reset to spawn-option defaults (theme, font, transparency)"
-              >
-                ↺
-              </button>
-
               {/* Refresh Button */}
               <button
                 className="footer-control-btn"
@@ -1711,10 +1924,20 @@ function SimpleTerminalApp() {
                 🔄
               </button>
 
+              {/* Detach Button - Only show for non-detached terminals */}
+              {!displayTerminal.isDetached && (
+                <button
+                  className="footer-control-btn"
+                  onClick={() => handleDetachTerminal(focusedTerminalId || activeTerminalId!)}
+                  title="Detach (keep session running in background)"
+                >
+                  ⊟
+                </button>
+              )}
+
               {/* Split Pane Controls - Only show when focused terminal is part of a split */}
               {focusedTerminalId && parentSplitTerminal && (
                 <>
-                  <span className="footer-separator">│</span>
                   <button
                     className="footer-control-btn"
                     onClick={() => handlePopOutPane(focusedTerminalId)}
@@ -1735,14 +1958,45 @@ function SimpleTerminalApp() {
           </div>
 
           <div className="footer-right">
-            {/* Customize Panel Toggle */}
-            <button
-              className="footer-control-btn"
-              onClick={() => setShowCustomizePanel(!showCustomizePanel)}
-              title="Customize theme, transparency, font"
-            >
-              🎨
-            </button>
+            {/* Customization Controls */}
+            <div className="footer-controls">
+              {/* Font Size Controls */}
+              <button
+                className="footer-control-btn"
+                onClick={() => handleFontSizeChange(-1)}
+                title="Decrease font size"
+                disabled={!displayTerminal.fontSize || displayTerminal.fontSize <= 10}
+              >
+                Font −
+              </button>
+              <span className="font-size-display">{displayTerminal.fontSize || useSettingsStore.getState().terminalDefaultFontSize}px</span>
+              <button
+                className="footer-control-btn"
+                onClick={() => handleFontSizeChange(1)}
+                title="Increase font size"
+                disabled={!!displayTerminal.fontSize && displayTerminal.fontSize >= 24}
+              >
+                Font +
+              </button>
+
+              {/* Reset to Defaults Button */}
+              <button
+                className="footer-control-btn"
+                onClick={handleResetToDefaults}
+                title="Reset to spawn-option defaults (theme, font, transparency)"
+              >
+                ↻
+              </button>
+
+              {/* Customize Panel Toggle */}
+              <button
+                className="footer-control-btn"
+                onClick={() => setShowCustomizePanel(!showCustomizePanel)}
+                title="Customize theme, transparency, font"
+              >
+                🎨
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -1822,13 +2076,16 @@ function SimpleTerminalApp() {
         />
       )}
 
-      {/* Detached Sessions Modal */}
+      {/* Session Manager Modal (Detached + Orphaned Sessions) */}
       <DetachedSessionsModal
         isOpen={showDetachedModal}
         onClose={() => setShowDetachedModal(false)}
         detachedSessions={detachedSessions}
+        orphanedSessions={orphanedSessions}
         onReattach={handleReattachMultiple}
         onKill={handleKillSession}
+        onAdoptOrphans={handleAdoptOrphans}
+        onKillOrphans={handleKillOrphans}
       />
     </div>
   )
