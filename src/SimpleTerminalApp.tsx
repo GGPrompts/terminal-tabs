@@ -675,13 +675,11 @@ function SimpleTerminalApp() {
 
     console.log(`🔄 Reattaching terminal: ${terminal.name} (${terminal.sessionName})`)
 
-    // Update terminal state: mark as active, assign to current window
-    // The automatic reconnection flow in useWebSocketManager will handle it
-    // (same pattern as popout feature - just set status='spawning' and let it reconnect)
+    // Update terminal state FIRST: mark as active, assign to current window
     updateTerminal(terminalId, {
       isDetached: false,
       windowId: currentWindowId,
-      status: 'spawning',  // Triggers automatic reconnection in useWebSocketManager
+      status: 'spawning',  // Will be updated to 'active' after reconnection
       lastActiveTime: Date.now(),
       agentId: undefined,  // Clear old agent ID so it gets a fresh one
     })
@@ -689,9 +687,33 @@ function SimpleTerminalApp() {
     // Set as active tab
     setActiveTerminal(terminalId)
 
-    // Reconnection will happen automatically via useWebSocketManager
-    // It queries for tmux sessions and reconnects terminals with status='spawning' + sessionName
-    console.log(`✅ Queued terminal for reattachment: ${terminal.name} to window ${currentWindowId}`)
+    // Wait for state update to propagate, then manually trigger reconnection
+    // (popout works because new window triggers fresh query, but same window needs manual trigger)
+    setTimeout(() => {
+      // Find spawn option for this terminal type
+      const option = terminal.command
+        ? spawnOptions.find(opt => opt.command === terminal.command)
+        : spawnOptions.find(opt => opt.terminalType === terminal.terminalType)
+
+      if (option) {
+        // Get updated terminal from store (has windowId set now)
+        const updatedTerminal = useSimpleTerminalStore.getState().terminals.find(t => t.id === terminalId)
+        if (updatedTerminal) {
+          console.log(`🔄 Manually triggering reconnection for ${updatedTerminal.name}`)
+          handleReconnectTerminal(updatedTerminal, option).catch(err => {
+            console.error('[handleReattachTab] Reconnection failed:', err)
+            // Revert on failure
+            updateTerminal(terminalId, {
+              isDetached: true,
+              windowId: null,
+              status: 'active'
+            })
+          })
+        }
+      } else {
+        console.error('[handleReattachTab] No spawn option found for terminal type:', terminal.terminalType)
+      }
+    }, 100) // Small delay to ensure state update completes
   }
 
   const handleTabClick = (terminalId: string) => {
