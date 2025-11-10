@@ -288,20 +288,13 @@ export function useWebSocketManager(
           // Track which sessions we've started reconnecting (prevent duplicates)
           const reconnectingSessionsSet = new Set<string>()
 
-          // Fix split containers stuck in 'spawning' status
-          storedTerminals.forEach(terminal => {
-            if (terminal.splitLayout && terminal.splitLayout.type !== 'single' && terminal.status !== 'active') {
-              console.log(`[useWebSocketManager] ✅ Setting split container to active:`, terminal.name)
-              updateTerminal(terminal.id, { status: 'active' })
-            }
-          })
-
           // Process stored terminals
           storedTerminals.forEach(terminal => {
             if (terminal.sessionName && activeSessions.has(terminal.sessionName)) {
-              // Skip split containers - they don't have actual sessions, only their panes do
-              if (terminal.splitLayout && terminal.splitLayout.type !== 'single') {
-                console.log(`[useWebSocketManager] ⏭️ Skipping split container (panes will reconnect separately):`, terminal.sessionName)
+              // Skip split containers ONLY if they're hidden (their session belongs to a pane)
+              // But allow them to reconnect if they're visible (they are the first pane)
+              if (terminal.splitLayout && terminal.splitLayout.type !== 'single' && terminal.isHidden) {
+                console.log(`[useWebSocketManager] ⏭️ Skipping hidden split container (panes will reconnect separately):`, terminal.sessionName)
                 return
               }
 

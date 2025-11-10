@@ -69,7 +69,7 @@ export function usePopout(
     const isSplitContainer = terminal.splitLayout && terminal.splitLayout.type !== 'single'
 
     if (isSplitContainer) {
-      console.log(`[usePopout] 🔓 Clearing sessionName on split container (was: ${terminal.sessionName}) to prevent reconnection collision`)
+      console.log(`[usePopout] 🔓 Unpacking split container (keeping sessionName: ${terminal.sessionName})`)
     }
 
     updateTerminal(terminalId, {
@@ -78,9 +78,9 @@ export function usePopout(
       windowId: newWindowId,
       // Clear split layout so it becomes a normal tab in the new window
       splitLayout: isSplitContainer ? { type: 'single', panes: [] } : terminal.splitLayout,
-      // CRITICAL: Clear sessionName to prevent collision with pane terminals during reconnection
-      // The container was just a UI placeholder for the split - it shouldn't reconnect to any session
-      sessionName: isSplitContainer ? undefined : terminal.sessionName,
+      // CRITICAL: Keep sessionName! In polish branch, the container IS the first pane's terminal
+      // and holds its session. Clearing it would prevent the first pane from reconnecting.
+      sessionName: terminal.sessionName,
     })
 
     // Update split panes - move to new window and unhide them
@@ -160,8 +160,16 @@ export function usePopout(
     // to complete before opening new window, otherwise new window won't see updated windowId
     setTimeout(() => {
       console.log(`[usePopout] Step 4: Opening new window`)
+
+      // For unpacked splits, activate the first pane (not the container which has no session)
+      let activeTerminalId = terminalId
+      if (isSplitContainer && terminal.splitLayout && terminal.splitLayout.panes.length > 0) {
+        activeTerminalId = terminal.splitLayout.panes[0].terminalId
+        console.log(`[usePopout] Activating first pane: ${activeTerminalId} (container has no session)`)
+      }
+
       // Pass both windowId AND the terminalId to activate in the new window
-      const url = `${window.location.origin}${window.location.pathname}?window=${newWindowId}&active=${terminalId}`
+      const url = `${window.location.origin}${window.location.pathname}?window=${newWindowId}&active=${activeTerminalId}`
       const newWin = window.open(url, `tabz-${newWindowId}`)
 
       if (!newWin) {

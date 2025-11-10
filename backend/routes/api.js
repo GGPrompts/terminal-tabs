@@ -797,21 +797,6 @@ router.post('/tmux/detach/:name', asyncHandler(async (req, res) => {
       });
     }
 
-    // CRITICAL FIX: Remove terminal from backend registry to prevent reconnection to stale entry
-    // Find terminal by sessionName and remove it from registry
-    const terminalRegistry = require('../modules/terminal-registry');
-    const allTerminals = Array.from(terminalRegistry.terminals.values());
-    const terminalToRemove = allTerminals.find(t =>
-      t.sessionId === name || t.sessionName === name
-    );
-
-    if (terminalToRemove) {
-      console.log(`[API] Removing terminal ${terminalToRemove.name} from registry (session: ${name})`);
-      await terminalRegistry.closeTerminal(terminalToRemove.id, false); // false = don't kill tmux session
-    } else {
-      console.log(`[API] No terminal found in registry for session ${name}`);
-    }
-
     // Detach all clients from this session (non-destructive)
     // This doesn't kill the session, just detaches clients
     execSync(`tmux detach-client -s "${name}" 2>/dev/null || true`);
@@ -893,28 +878,21 @@ router.post('/console-log', asyncHandler(async (req, res) => {
     return res.status(400).json({ error: 'Expected logs array' });
   }
 
-  const { logger } = require('../modules/logger');
-
+  // Use plain console.log/error/warn so they appear in tmux terminal
   logs.forEach(({ level, message, source, timestamp }) => {
-    // Format: [Browser] [source] message
+    // Format: [Browser:source] message
     const prefix = source ? `[Browser:${source}]` : '[Browser]';
     const msg = `${prefix} ${message}`;
 
     switch(level) {
       case 'error':
-        logger.error(msg);
+        console.error(msg);
         break;
       case 'warn':
-        logger.warn(msg);
-        break;
-      case 'debug':
-        logger.debug(msg);
-        break;
-      case 'info':
-        logger.info(msg);
+        console.warn(msg);
         break;
       default:
-        logger.info(msg);  // Consola uses .info() not .log()
+        console.log(msg);
     }
   });
 

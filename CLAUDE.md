@@ -682,6 +682,22 @@ See PLAN.md for detailed technical documentation of these fixes.
 
 ## 🔍 Debugging & Monitoring
 
+### Quick Reference: Tmux Sessions
+
+When running with `./start-tmux.sh`, these are the active tmux sessions:
+
+| Session Name | Purpose | Capture Command |
+|--------------|---------|----------------|
+| `tabz:backend` | Backend server (Node.js) | `tmux capture-pane -t tabz:backend -p -S -100` |
+| `tabz:frontend` | Frontend dev server (Vite) | `tmux capture-pane -t tabz:frontend -p -S -100` |
+| `tt-bash-*` | Spawned Bash terminals | `tmux capture-pane -t tt-bash-xyz -p -S -50` |
+| `tt-cc-*` | Spawned Claude Code terminals | `tmux capture-pane -t tt-cc-abc -p -S -50` |
+| `tt-tfe-*` | Spawned TFE terminals | `tmux capture-pane -t tt-tfe-xyz -p -S -50` |
+
+**Pro tip:** Browser console logs are forwarded to `tabz:backend` with `[Browser:FileName.tsx:123]` prefix!
+
+---
+
 ### Checking Backend Logs
 
 The backend runs in a tmux session when started with `./start-tmux.sh`. View logs in multiple ways:

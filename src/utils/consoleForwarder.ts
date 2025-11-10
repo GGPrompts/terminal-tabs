@@ -3,9 +3,11 @@
  * Optimized for Claude Code debugging via tmux capture-pane
  */
 
-const BACKEND_URL = 'http://localhost:8127';
+// Use relative URL to leverage Vite proxy in dev mode
+const BACKEND_URL = import.meta.env.DEV ? '' : 'http://localhost:8127';
 let logBuffer: Array<{ level: string; message: string; timestamp: number; source?: string }> = [];
 let flushTimer: number | null = null;
+let originalConsoleError: typeof console.error | null = null;
 
 // Extract source file/line from stack trace
 function getSource(): string | undefined {
@@ -68,12 +70,23 @@ function flushLogs() {
   const batch = [...logBuffer];
   logBuffer = [];
 
-  fetch(`${BACKEND_URL}/api/console-log`, {
+  const url = `${BACKEND_URL}/api/console-log`;
+
+  fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ logs: batch })
-  }).catch(() => {
-    // Silent fail - backend might not be running
+  })
+  .then(res => {
+    if (!res.ok && originalConsoleError) {
+      originalConsoleError(`[ConsoleForwarder] Server returned ${res.status} for ${url}`);
+    }
+  })
+  .catch((err) => {
+    // Log to actual console (not forwarded) to debug
+    if (originalConsoleError) {
+      originalConsoleError('[ConsoleForwarder] Failed to send logs to:', url, 'Error:', err);
+    }
   });
 }
 
@@ -90,7 +103,7 @@ function queueLog(level: string, args: any[]) {
 
   // Flush after 100ms (batch multiple logs)
   if (flushTimer) clearTimeout(flushTimer);
-  flushTimer = setTimeout(flushLogs, 100);
+  flushTimer = setTimeout(flushLogs, 100) as any;
 }
 
 export function setupConsoleForwarding() {
@@ -103,6 +116,9 @@ export function setupConsoleForwarding() {
   const originalWarn = console.warn;
   const originalInfo = console.info;
   const originalDebug = console.debug;
+
+  // Store for error handling in flushLogs
+  originalConsoleError = originalError;
 
   // Override console methods
   console.log = (...args: any[]) => {

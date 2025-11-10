@@ -45,53 +45,48 @@ echo -e "${CYAN}Port: 8127 | WebSocket: ws://localhost:8127${NC}"
 echo ""
 
 # METHOD 1: Check for tmux session (if started with start-tmux.sh)
-if tmux has-session -t terminal-tabs 2>/dev/null; then
-  echo -e "${GREEN}✅ Found terminal-tabs tmux session${NC}"
+if tmux has-session -t tabz 2>/dev/null; then
+  echo -e "${GREEN}✅ Found tabz tmux session${NC}"
   echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
   echo ""
+  echo -e "${MAGENTA}📊 Live Backend Logs (updates every 2 seconds):${NC}"
+  echo -e "${YELLOW}Press Ctrl+C to exit${NC}"
+  echo ""
 
-  # Show recent backend logs (last 100 lines with colors preserved!)
-  echo -e "${MAGENTA}📊 Recent Backend Logs (from tmux):${NC}"
-  echo ""
-  tmux capture-pane -t terminal-tabs:backend -p -S -100 -e
-
-  echo ""
-  echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-  echo -e "${YELLOW}✨ Live view:${NC} ${CYAN}tmux attach -t terminal-tabs:backend${NC}"
-  echo ""
-  read -p "Press Enter to exit..."
+  # Live updating logs with colors preserved!
+  while true; do
+    clear
+    echo -e "${CYAN}╔════════════════════════════════════════╗${NC}"
+    echo -e "${CYAN}║    Terminal Tabs - Dev Logs 📊 (LIVE) ║${NC}"
+    echo -e "${CYAN}╚════════════════════════════════════════╝${NC}"
+    echo ""
+    tmux capture-pane -t tabz:backend -p -S -50 -e
+    sleep 2
+  done
 
 # METHOD 2: Check for log file (if enabled)
 elif [ -f "$LOG_FILE" ]; then
   echo -e "${GREEN}✅ Found log file${NC}"
   echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
   echo ""
+  echo -e "${MAGENTA}📊 Live Backend Logs (following file):${NC}"
+  echo -e "${YELLOW}Press Ctrl+C to exit${NC}"
+  echo ""
 
-  echo -e "${MAGENTA}📊 Recent Backend Logs (last 100 lines):${NC}"
-  echo ""
-  tail -100 "$LOG_FILE"
-
-  echo ""
-  echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-  echo -e "${YELLOW}✨ Live view:${NC} ${CYAN}tail -f $LOG_FILE${NC}"
-  echo ""
-  read -p "Press Enter to exit..."
+  # Live tail with colors
+  tail -f "$LOG_FILE"
 
 # METHOD 3: Use journalctl (Linux)
 elif command -v journalctl &> /dev/null; then
   echo -e "${YELLOW}💡 Using journalctl (system logs)${NC}"
   echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
   echo ""
+  echo -e "${MAGENTA}📊 Live Backend Logs (following journalctl):${NC}"
+  echo -e "${YELLOW}Press Ctrl+C to exit${NC}"
+  echo ""
 
-  echo -e "${MAGENTA}📊 Recent Backend Logs (last 50 lines):${NC}"
-  echo ""
-  journalctl _PID=$BACKEND_PID -n 50 --no-pager --output=cat
-
-  echo ""
-  echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-  echo -e "${YELLOW}✨ Live view:${NC} ${CYAN}journalctl _PID=$BACKEND_PID -f${NC}"
-  echo ""
-  read -p "Press Enter to exit..."
+  # Live follow with journalctl
+  journalctl _PID=$BACKEND_PID -f --output=cat
 
 # METHOD 4: Fallback - helpful message
 else

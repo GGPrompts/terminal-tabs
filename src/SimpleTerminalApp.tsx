@@ -42,13 +42,6 @@ import {
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 
-// Extend Window interface for handlePopOutTab
-declare global {
-  interface Window {
-    handlePopOutTab?: (terminalId: string) => void
-  }
-}
-
 interface SpawnOption {
   label: string
   command: string
@@ -180,17 +173,6 @@ function SortableTab({ terminal, isActive, onActivate, onClose, onContextMenu, d
     >
       {renderTabIcon()}
       <span className="tab-label">{terminal.name}</span>
-      <button
-        className="popout-tab-btn"
-        onClick={(e) => {
-          e.stopPropagation()
-          window.handlePopOutTab?.(terminal.id)
-        }}
-        onPointerDown={(e) => e.stopPropagation()}
-        title="Pop out to new browser tab"
-      >
-        ↗
-      </button>
       <button
         className="tab-close"
         onClick={onClose}
@@ -346,6 +328,28 @@ function SimpleTerminalApp() {
       }
     }
   }, [currentWindowId, activeTerminalId, storedTerminals, visibleTerminals.length])
+
+  // Listen for storage events from other windows (trash button clears all)
+  useEffect(() => {
+    const handleStorageChange = (e: StorageEvent) => {
+      // Detect when terminals are cleared from another window
+      if (e.key === 'simple-terminal-storage' && e.newValue) {
+        try {
+          const newState = JSON.parse(e.newValue)
+          // If another window cleared all terminals, reload this window too
+          if (newState.state?.terminals && newState.state.terminals.length === 0 && storedTerminals.length > 0) {
+            console.log('[SimpleTerminalApp] 🗑️ Detected trash action from another window, reloading...')
+            setTimeout(() => window.location.reload(), 500)
+          }
+        } catch (err) {
+          // Ignore parse errors
+        }
+      }
+    }
+
+    window.addEventListener('storage', handleStorageChange)
+    return () => window.removeEventListener('storage', handleStorageChange)
+  }, [storedTerminals.length])
 
   // Check for ?active=xxx parameter to set initial active terminal (for popout windows)
   // CRITICAL: Watch full storedTerminals array, not just length, to catch windowId changes
@@ -563,14 +567,6 @@ function SimpleTerminalApp() {
     updateTerminal,
     setActiveTerminal
   )
-
-  // Expose handlePopOutTab to window for SortableTab to use
-  useEffect(() => {
-    window.handlePopOutTab = handlePopOutTab
-    return () => {
-      delete window.handlePopOutTab
-    }
-  }, [handlePopOutTab])
 
   const handleCloseTerminal = (terminalId: string) => {
     const terminal = storedTerminals.find(t => t.id === terminalId)
