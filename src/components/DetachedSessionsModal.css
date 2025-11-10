@@ -1,0 +1,215 @@
+.detached-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  backdrop-filter: blur(4px);
+}
+
+.detached-modal-content {
+  background: linear-gradient(135deg, rgba(20, 20, 30, 0.95), rgba(30, 30, 45, 0.95));
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+  width: 90%;
+  max-width: 700px;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.detached-modal-header {
+  padding: 20px 24px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.detached-modal-header h2 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 600;
+  color: #fff;
+}
+
+.detached-close-btn {
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: #fff;
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 18px;
+  transition: all 0.2s;
+}
+
+.detached-close-btn:hover {
+  background: rgba(255, 100, 100, 0.3);
+  border-color: rgba(255, 100, 100, 0.5);
+}
+
+.detached-sessions-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
+}
+
+.detached-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 20px;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.detached-empty-icon {
+  font-size: 48px;
+  margin-bottom: 16px;
+}
+
+.detached-empty-text {
+  font-size: 16px;
+}
+
+.detached-session-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  margin-bottom: 8px;
+  transition: all 0.2s;
+}
+
+.detached-session-item:hover {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.15);
+}
+
+.detached-session-item.selected {
+  background: rgba(255, 180, 0, 0.15);
+  border-color: rgba(255, 180, 0, 0.3);
+}
+
+.detached-checkbox {
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+  accent-color: #ffb400;
+}
+
+.detached-icon {
+  font-size: 24px;
+  flex-shrink: 0;
+}
+
+.detached-session-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.detached-name {
+  font-size: 15px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.9);
+  margin-bottom: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.detached-details {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.5);
+  font-family: monospace;
+}
+
+.detached-action-btn {
+  padding: 6px 12px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.detached-action-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.25);
+  color: #fff;
+}
+
+.reattach-btn:hover {
+  background: rgba(100, 180, 255, 0.2);
+  border-color: rgba(100, 180, 255, 0.4);
+  color: #80c0ff;
+}
+
+.kill-btn:hover {
+  background: rgba(255, 100, 100, 0.2);
+  border-color: rgba(255, 100, 100, 0.4);
+  color: #ff8080;
+}
+
+.detached-modal-actions {
+  padding: 16px 24px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.detached-bulk-btn {
+  padding: 10px 16px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.detached-bulk-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.25);
+  color: #fff;
+}
+
+.detached-bulk-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.reattach-bulk-btn:hover:not(:disabled) {
+  background: rgba(100, 180, 255, 0.2);
+  border-color: rgba(100, 180, 255, 0.4);
+  color: #80c0ff;
+}
+
+.kill-bulk-btn:hover:not(:disabled),
+.kill-all-btn:hover {
+  background: rgba(255, 100, 100, 0.2);
+  border-color: rgba(255, 100, 100, 0.4);
+  color: #ff8080;
+}
+
+.cancel-btn:hover {
+  background: rgba(255, 255, 255, 0.15);
+}

@@ -3,6 +3,7 @@ import './SimpleTerminalApp.css'
 import { Terminal } from './components/Terminal'
 import { SplitLayout } from './components/SplitLayout'
 import { SettingsModal } from './components/SettingsModal'
+import { DetachedSessionsModal } from './components/DetachedSessionsModal'
 import { TabContextMenu } from './components/TabContextMenu'
 import { FontFamilyDropdown } from './components/FontFamilyDropdown'
 import { BackgroundGradientDropdown } from './components/BackgroundGradientDropdown'
@@ -237,6 +238,7 @@ function SortableTab({ terminal, isActive, onActivate, onClose, onContextMenu, d
 function SimpleTerminalApp() {
   const [showSpawnMenu, setShowSpawnMenu] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
+  const [showDetachedModal, setShowDetachedModal] = useState(false)
   const [headerVisible, setHeaderVisible] = useState(true)
 
   // Settings
@@ -301,8 +303,8 @@ function SimpleTerminalApp() {
       // Hidden terminals (split panes) are never visible in tab bar
       if (t.isHidden) return false
 
-      // Detached terminals (windowId === null) appear in ALL windows
-      if (t.isDetached && !t.windowId) return true
+      // ✅ NEW: Detached terminals don't show in tab bar (they're in the detached modal)
+      if (t.isDetached) return false
 
       // Terminals without a windowId belong to the main window (backwards compatibility)
       const terminalWindow = t.windowId || 'main'
@@ -631,23 +633,14 @@ function SimpleTerminalApp() {
         throw new Error(`Failed to detach: ${response.statusText}`)
       }
 
-      // Update terminal state: mark as detached, clear windowId to show in all windows
+      // Update terminal state: mark as detached, clear windowId (global, not window-scoped)
       updateTerminal(terminalId, {
         isDetached: true,
-        windowId: null,  // null = show in all windows!
+        windowId: undefined,  // ✅ Make global, not window-scoped
         lastActiveTime: Date.now(),
         lastAttachedWindowId: currentWindowId,
         agentId: undefined  // Clear WebSocket agent ID
       })
-
-      // Close WebSocket agent if exists
-      const agent = webSocketAgents.find(a => a.id === terminal.agentId)
-      if (agent?.ws) {
-        agent.ws.send(JSON.stringify({
-          type: 'disconnect',
-          id: terminal.agentId
-        }))
-      }
 
       // Remove agent from the array
       const updatedAgents = webSocketAgents.filter(a => a.id !== terminal.agentId)
@@ -705,7 +698,7 @@ function SimpleTerminalApp() {
             // Revert on failure
             updateTerminal(terminalId, {
               isDetached: true,
-              windowId: null,
+              windowId: undefined,
               status: 'active'
             })
           })
@@ -714,6 +707,36 @@ function SimpleTerminalApp() {
         console.error('[handleReattachTab] No spawn option found for terminal type:', terminal.terminalType)
       }
     }, 100) // Small delay to ensure state update completes
+  }
+
+  const handleReattachMultiple = async (terminalIds: string[]) => {
+    for (const terminalId of terminalIds) {
+      await handleReattachTab(terminalId)
+    }
+    setShowDetachedModal(false)
+  }
+
+  const handleKillSession = async (terminalIds: string[]) => {
+    const API_URL = 'http://localhost:8127'
+
+    for (const terminalId of terminalIds) {
+      const terminal = storedTerminals.find(t => t.id === terminalId)
+      if (!terminal?.sessionName) continue
+
+      try {
+        // Kill tmux session via backend
+        await fetch(`${API_URL}/api/tmux/kill/${terminal.sessionName}`, {
+          method: 'POST'
+        })
+
+        // Remove from store
+        removeTerminal(terminalId)
+      } catch (error) {
+        console.error(`Failed to kill session ${terminal.sessionName}:`, error)
+      }
+    }
+
+    setShowDetachedModal(false)
   }
 
   const handleTabClick = (terminalId: string) => {
@@ -728,6 +751,13 @@ function SimpleTerminalApp() {
     }
   }
 
+  // Get detached sessions for modal (sorted by most recent first)
+  const detachedSessions = useMemo(() => {
+    return storedTerminals
+      .filter(t => t.isDetached)
+      .sort((a, b) => (b.lastActiveTime || b.createdAt) - (a.lastActiveTime || a.createdAt))
+  }, [storedTerminals])
+
   // Keyboard shortcuts (extracted to custom hook)
   // Must be called after handleSpawnTerminal and handleCloseTerminal are defined
   useKeyboardShortcuts(
@@ -740,6 +770,19 @@ function SimpleTerminalApp() {
     handleSpawnTerminal,
     handleCloseTerminal
   )
+
+  // Tmux health check - Detect manual tmux operations (Ctrl+B &, etc.)
+  const TMUX_HEALTH_CHECK_INTERVAL = 15000 // 15 seconds
+  useEffect(() => {
+    const healthCheckInterval = setInterval(() => {
+      if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return
+
+      // Query active tmux sessions
+      wsRef.current.send(JSON.stringify({ type: 'query-tmux-sessions' }))
+    }, TMUX_HEALTH_CHECK_INTERVAL)
+
+    return () => clearInterval(healthCheckInterval)
+  }, [])
 
   // Pop out pane to new tab (undo split)
   const handlePopOutPane = (paneTerminalId: string) => {
@@ -1150,7 +1193,7 @@ function SimpleTerminalApp() {
       }
 
       // Build update object with pane title + metadata (if available)
-      const updates: Partial<Terminal> = {
+      const updates: Partial<StoredTerminal> = {
         name: infoResult.data.paneTitle
       }
 
@@ -1302,6 +1345,21 @@ function SimpleTerminalApp() {
           </button>
         </div>
 
+        {/* Header Stats - Active/Detached counts */}
+        <div className="header-stats-container">
+          <span className="header-stat active-stat" title="Active terminals">
+            A: {storedTerminals.filter(t => !t.isDetached && !t.isHidden).length}
+          </span>
+          <span
+            className={`header-stat detached-stat ${detachedSessions.length > 0 ? 'has-detached' : ''}`}
+            title={detachedSessions.length > 0 ? "Detached sessions (click to view)" : "No detached sessions"}
+            onClick={() => detachedSessions.length > 0 && setShowDetachedModal(true)}
+            style={{ cursor: detachedSessions.length > 0 ? 'pointer' : 'default' }}
+          >
+            D: {detachedSessions.length}
+          </span>
+        </div>
+
         <div className="header-actions">
           <button
             className="clear-sessions-button"
@@ -1413,6 +1471,23 @@ function SimpleTerminalApp() {
           </div>
 
           <div className="spawn-menu-list">
+            {/* Detached Sessions Option - Only show when there are detached sessions */}
+            {detachedSessions.length > 0 && !splitMode.active && (
+              <div
+                className="spawn-option detached-option"
+                onClick={() => {
+                  setShowDetachedModal(true)
+                  setShowSpawnMenu(false)
+                }}
+              >
+                <span className="spawn-icon">📂</span>
+                <div className="spawn-info">
+                  <div className="spawn-label">Detached Sessions ({detachedSessions.length})</div>
+                  <div className="spawn-description">Reattach orphaned tmux sessions</div>
+                </div>
+              </div>
+            )}
+
             {spawnOptions
               .map((option, originalIdx) => ({ option, originalIdx }))
               .filter(({ option }) => {
@@ -1746,6 +1821,15 @@ function SimpleTerminalApp() {
           onCloseTab={() => handleCloseTerminal(contextMenu.terminalId!)}
         />
       )}
+
+      {/* Detached Sessions Modal */}
+      <DetachedSessionsModal
+        isOpen={showDetachedModal}
+        onClose={() => setShowDetachedModal(false)}
+        detachedSessions={detachedSessions}
+        onReattach={handleReattachMultiple}
+        onKill={handleKillSession}
+      />
     </div>
   )
 }

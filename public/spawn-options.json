@@ -145,11 +145,14 @@
       "label": "LazyGit",
       "command": "lazygit",
       "terminalType": "bash",
-      "workingDir": "~/projects",
+      "workingDir": "",
       "icon": "🌿",
       "description": "Terminal UI for git",
       "defaultTheme": "github-dark",
-      "defaultTransparency": 95
+      "defaultTransparency": 95,
+      "defaultFontSize": 16,
+      "defaultFontFamily": "monospace",
+      "defaultBackground": "dark-neutral"
     },
     {
       "label": "AIChat",

@@ -170,6 +170,43 @@
   box-shadow: 0 2px 6px rgba(34, 197, 94, 0.4);
 }
 
+/* Header Stats (Active/Detached counts) */
+.header-stats-container {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 4px 12px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  font-family: monospace;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.header-stat {
+  color: rgba(255, 255, 255, 0.7);
+  transition: all 0.2s;
+}
+
+.header-stat.active-stat {
+  color: rgba(100, 200, 255, 0.9);
+}
+
+.header-stat.detached-stat {
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.header-stat.detached-stat.has-detached {
+  color: rgba(255, 180, 0, 0.9);
+}
+
+.header-stat.detached-stat.has-detached:hover {
+  color: rgba(255, 200, 50, 1);
+  text-shadow: 0 0 8px rgba(255, 180, 0, 0.4);
+  cursor: pointer;
+}
+
 .header-actions {
   display: flex;
   align-items: center;

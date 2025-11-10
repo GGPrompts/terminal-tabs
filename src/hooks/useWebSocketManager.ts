@@ -302,57 +302,83 @@ export function useWebSocketManager(
         if (message.data && message.data.sessions) {
           const activeSessions = new Set(message.data.sessions)
           const currentSpawnOptions = spawnOptionsRef.current
+          const isInitialLoad = !hasQueriedSessions.current
 
           console.log('[useWebSocketManager] 📋 Active tmux sessions:', Array.from(activeSessions))
+          console.log(`[useWebSocketManager] Mode: ${isInitialLoad ? 'INITIAL LOAD (will reconnect)' : 'HEALTH CHECK (cleanup only)'}`)
 
           // Track which sessions we've started reconnecting (prevent duplicates)
           const reconnectingSessionsSet = new Set<string>()
+          let reconnectCount = 0
+          let removeCount = 0
 
           // Process stored terminals
           storedTerminals.forEach(terminal => {
             if (terminal.sessionName && activeSessions.has(terminal.sessionName)) {
-              // Skip split containers ONLY if they're hidden (their session belongs to a pane)
-              // But allow them to reconnect if they're visible (they are the first pane)
-              if (terminal.splitLayout && terminal.splitLayout.type !== 'single' && terminal.isHidden) {
-                console.log(`[useWebSocketManager] ⏭️ Skipping hidden split container (panes will reconnect separately):`, terminal.sessionName)
-                return
+              // Session exists in tmux
+
+              // ONLY reconnect during initial load, NOT during health checks
+              if (isInitialLoad) {
+                // Skip split containers ONLY if they're hidden (their session belongs to a pane)
+                // But allow them to reconnect if they're visible (they are the first pane)
+                if (terminal.splitLayout && terminal.splitLayout.type !== 'single' && terminal.isHidden) {
+                  return
+                }
+
+                // Skip duplicates
+                if (reconnectingSessionsSet.has(terminal.sessionName)) {
+                  return
+                }
+
+                // Skip terminals from other windows
+                const terminalWindow = terminal.windowId || 'main'
+                if (terminalWindow !== currentWindowId) {
+                  return
+                }
+
+                // ✅ CRITICAL FIX: Only reconnect if terminal is NOT already connected
+                // Check both localStorage agentId AND active WebSocket agents
+                const hasActiveAgent = terminal.agentId && webSocketAgents.some(a => a.id === terminal.agentId)
+                const needsReconnection = !hasActiveAgent && terminal.status !== 'active'
+
+                if (needsReconnection) {
+                  reconnectingSessionsSet.add(terminal.sessionName)
+                  reconnectCount++
+                  console.log(`[useWebSocketManager] 🔄 Reconnecting to session: ${terminal.sessionName} (agentId: ${terminal.agentId}, hasActiveAgent: ${hasActiveAgent}, status: ${terminal.status})`)
+
+                  // Find spawn option
+                  let option = terminal.command
+                    ? currentSpawnOptions.find(opt => opt.command === terminal.command)
+                    : null
+
+                  if (!option) {
+                    option = currentSpawnOptions.find(opt => opt.terminalType === terminal.terminalType)
+                  }
+
+                  if (option) {
+                    handleReconnectTerminal(terminal, option)
+                  } else {
+                    console.warn(`[useWebSocketManager] ⚠️ No spawn option found for: ${terminal.command}`)
+                    updateTerminal(terminal.id, { status: 'error' })
+                  }
+                }
               }
-
-              // Skip duplicates
-              if (reconnectingSessionsSet.has(terminal.sessionName)) {
-                return
-              }
-
-              // Skip terminals from other windows
-              const terminalWindow = terminal.windowId || 'main'
-              if (terminalWindow !== currentWindowId) {
-                return
-              }
-
-              reconnectingSessionsSet.add(terminal.sessionName)
-              console.log(`[useWebSocketManager] 🔄 Reconnecting to session: ${terminal.sessionName}`)
-
-              // Find spawn option
-              let option = terminal.command
-                ? currentSpawnOptions.find(opt => opt.command === terminal.command)
-                : null
-
-              if (!option) {
-                option = currentSpawnOptions.find(opt => opt.terminalType === terminal.terminalType)
-              }
-
-              if (option) {
-                handleReconnectTerminal(terminal, option)
-              } else {
-                console.warn(`[useWebSocketManager] ⚠️ No spawn option found for: ${terminal.command}`)
-                updateTerminal(terminal.id, { status: 'error' })
-              }
-            } else if (terminal.sessionName) {
-              // Session is dead, remove terminal
-              console.log(`[useWebSocketManager] ❌ Session ${terminal.sessionName} not found, removing`)
+              // During health check: session exists, terminal is fine, do nothing
+            } else if (terminal.sessionName && !terminal.isDetached && terminal.agentId) {
+              // Active terminal's session is dead (manually killed), remove terminal
+              removeCount++
+              console.log(`[useWebSocketManager] ❌ Session ${terminal.sessionName} not found, removing active terminal`)
+              removeTerminal(terminal.id)
+            } else if (terminal.sessionName && terminal.isDetached) {
+              // Detached session is gone (killed manually), remove from store
+              removeCount++
+              console.log(`[useWebSocketManager] ⚠️ Detached session ${terminal.sessionName} no longer exists, cleaning up`)
               removeTerminal(terminal.id)
             }
           })
+
+          // Summary log - should be 0/0 during health checks if everything is stable
+          console.log(`[useWebSocketManager] ✅ ${isInitialLoad ? 'Initial load' : 'Health check'} complete: ${reconnectCount} reconnected, ${removeCount} removed`)
         }
         break
     }

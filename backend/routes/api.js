@@ -874,6 +874,48 @@ router.post('/tmux/detach/:name', asyncHandler(async (req, res) => {
 }));
 
 /**
+ * POST /api/tmux/kill/:name - Kill a specific tmux session
+ * WARNING: This is destructive and cannot be undone
+ */
+router.post('/tmux/kill/:name', asyncHandler(async (req, res) => {
+  const { name } = req.params;
+
+  if (!name || typeof name !== 'string') {
+    return res.status(400).json({
+      success: false,
+      error: 'Session name is required'
+    });
+  }
+
+  try {
+    const { execSync } = require('child_process');
+
+    // Check if session exists
+    try {
+      execSync(`tmux has-session -t "${name}" 2>/dev/null`);
+    } catch (err) {
+      return res.status(404).json({
+        success: false,
+        error: `Session ${name} not found`
+      });
+    }
+
+    // Kill the session
+    execSync(`tmux kill-session -t "${name}" 2>/dev/null`);
+
+    res.json({
+      success: true,
+      message: `Killed session "${name}"`
+    });
+  } catch (err) {
+    res.status(500).json({
+      success: false,
+      error: err.message
+    });
+  }
+}));
+
+/**
  * POST /api/tmux/cleanup - Kill all tmux sessions matching a pattern
  * WARNING: This is destructive and cannot be undone
  */
