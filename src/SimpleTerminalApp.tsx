@@ -641,14 +641,17 @@ function SimpleTerminalApp() {
       })
 
       // Close WebSocket agent if exists
-      const agent = webSocketAgents.get(terminal.agentId)
+      const agent = webSocketAgents.find(a => a.id === terminal.agentId)
       if (agent?.ws) {
         agent.ws.send(JSON.stringify({
           type: 'disconnect',
           id: terminal.agentId
         }))
       }
-      webSocketAgents.delete(terminal.agentId)
+
+      // Remove agent from the array
+      const updatedAgents = webSocketAgents.filter(a => a.id !== terminal.agentId)
+      setWebSocketAgents(updatedAgents)
 
       // If this was the active tab, switch to another non-detached tab
       if (activeTerminalId === terminalId) {
