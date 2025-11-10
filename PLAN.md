@@ -20,7 +20,348 @@
 
 ---
 
-## 🎯 NEXT UP: Unified Session Manager with Previews
+## 🎯 NEXT UP: Footer Reorganization & Terminal-Specific Detach
+
+**Priority**: High (UX improvement + feature enhancement)
+**Estimated Time**: 2-3 hours
+**Status**: Planning phase
+
+### Goals
+
+1. **Reorganize footer buttons** - Terminal controls (left) vs Customization (right)
+2. **Add detach to footer** - Per-terminal detach instead of tab-level (avoids tmux/split confusion)
+3. **Handle split collapse** - Reuse popout logic for graceful split handling
+
+### Current Footer Layout (Mixed Controls)
+```
+Left: [Terminal Info] [Font -] [Font +] [🔄 Refresh] [↗ Pop Out] [✕ Close]
+Right: [🎨 Customize]
+```
+
+**Problems:**
+- Font controls are customization, but on left with terminal controls
+- No detach option for individual terminals in splits
+- Right-click tab detach is confusing for splits (which terminal?)
+
+### New Footer Layout (Separated by Purpose)
+
+```
+Left (Terminal Controls): [Terminal Info] [🔄 Refresh] [⊟ Detach] [↗ Pop Out] [✕ Close]
+Right (Customization): [Font -] [Font +] [↻ Reset] [🎨 Customize]
+```
+
+**Benefits:**
+- ✅ Clear separation: Controls vs Customization
+- ✅ Terminal-specific detach (works perfectly with splits)
+- ✅ Pop out already handles split collapse (reuse logic!)
+- ✅ Avoids mixing tmux splits with app splits
+
+### Implementation Plan
+
+#### Phase 1: Reorganize Footer Buttons (30 minutes)
+
+**Move font controls to right side:**
+```tsx
+// src/SimpleTerminalApp.tsx - Footer rendering
+
+{/* LEFT: Terminal Controls */}
+<div className="footer-left">
+  {/* Terminal info (name, session) */}
+  <span className="terminal-info">
+    {terminal.icon} {terminal.name}
+    {terminal.sessionName && (
+      <span className="session-name">({terminal.sessionName})</span>
+    )}
+  </span>
+
+  {/* Control buttons */}
+  <button onClick={() => handleRefreshTerminal(terminal.id)} title="Refresh terminal">
+    🔄
+  </button>
+
+  {!terminal.isDetached && (
+    <button
+      onClick={() => handleDetachTerminal(terminal.id)}
+      title="Detach (keep session running in background)"
+    >
+      ⊟
+    </button>
+  )}
+
+  {terminal.splitLayout && terminal.splitLayout.type !== 'single' && (
+    <button onClick={() => handlePopOutPane(terminal.id)} title="Pop out to new tab">
+      ↗
+    </button>
+  )}
+
+  <button onClick={() => handleCloseTerminal(terminal.id)} title="Close terminal">
+    ✕
+  </button>
+</div>
+
+{/* RIGHT: Customization */}
+<div className="footer-right">
+  <button onClick={() => handleFontChange(terminal.id, -1)} title="Decrease font size">
+    Font -
+  </button>
+
+  <button onClick={() => handleFontChange(terminal.id, 1)} title="Increase font size">
+    Font +
+  </button>
+
+  <button onClick={() => handleResetToDefaults(terminal.id)} title="Reset to spawn defaults">
+    ↻
+  </button>
+
+  <button onClick={() => setCustomizeModalOpen(true)} title="Customize">
+    🎨
+  </button>
+</div>
+```
+
+**Update CSS for two-column layout:**
+```css
+/* src/SimpleTerminalApp.css */
+.terminal-footer {
+  display: flex;
+  justify-content: space-between;  /* Left and right sections */
+  align-items: center;
+  padding: 8px 12px;
+  gap: 16px;
+}
+
+.footer-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+}
+
+.footer-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+```
+
+#### Phase 2: Implement Terminal-Specific Detach (1-2 hours)
+
+**Add detach handler with split collapse:**
+```typescript
+// src/SimpleTerminalApp.tsx
+
+const handleDetachTerminal = async (terminalId: string) => {
+  const terminal = storedTerminals.find(t => t.id === terminalId)
+  if (!terminal) return
+
+  console.log(`⊟ Detaching terminal: ${terminal.name} (${terminal.sessionName})`)
+
+  // 1. Detach from tmux via API
+  if (terminal.sessionName) {
+    try {
+      const response = await fetch(`${API_URL}/api/tmux/detach/${terminal.sessionName}`, {
+        method: 'POST'
+      })
+
+      if (!response.ok) {
+        throw new Error(`Failed to detach: ${response.statusText}`)
+      }
+    } catch (error) {
+      console.error('[handleDetachTerminal] Error detaching from tmux:', error)
+      alert('Failed to detach terminal. Check backend logs.')
+      return
+    }
+  }
+
+  // 2. Update terminal state: mark as detached, clear windowId (global)
+  updateTerminal(terminalId, {
+    isDetached: true,
+    windowId: undefined,  // Make global, not window-scoped
+    lastActiveTime: Date.now(),
+    lastAttachedWindowId: currentWindowId,
+    agentId: undefined  // Clear WebSocket agent ID
+  })
+
+  // 3. Handle split collapse (REUSE POPOUT LOGIC!)
+  const parentSplit = storedTerminals.find(t =>
+    t.splitLayout?.type !== 'single' &&
+    t.splitLayout?.panes?.some(p => p.terminalId === terminalId)
+  )
+
+  if (parentSplit) {
+    console.log('[handleDetachTerminal] Terminal is in split, collapsing...')
+
+    // Find remaining pane
+    const remainingPane = parentSplit.splitLayout.panes.find(
+      p => p.terminalId !== terminalId
+    )
+
+    if (remainingPane) {
+      // Collapse split - clear layout on container
+      updateTerminal(parentSplit.id, {
+        splitLayout: { type: 'single', panes: [] }
+      })
+
+      // Unhide remaining pane
+      updateTerminal(remainingPane.terminalId, {
+        isHidden: false
+      })
+
+      // Set remaining pane as active
+      setActiveTerminal(remainingPane.terminalId)
+      setFocusedTerminal(remainingPane.terminalId)
+
+      console.log('[handleDetachTerminal] ✅ Split collapsed, remaining pane promoted')
+    } else {
+      // No remaining pane - close container
+      console.log('[handleDetachTerminal] No remaining pane, closing container')
+      removeTerminal(parentSplit.id)
+    }
+  }
+
+  console.log(`✅ Detached terminal: ${terminal.name}`)
+}
+```
+
+**Key insight:** This is almost identical to `handlePopOutPane` logic! Could extract shared function:
+
+```typescript
+// src/utils/splitUtils.ts (NEW FILE)
+
+export function collapseSplitAfterRemoval(
+  terminalId: string,
+  terminals: StoredTerminal[],
+  updateTerminal: (id: string, updates: Partial<StoredTerminal>) => void,
+  removeTerminal: (id: string) => void,
+  setActiveTerminal: (id: string) => void,
+  setFocusedTerminal: (id: string) => void
+) {
+  const parentSplit = terminals.find(t =>
+    t.splitLayout?.type !== 'single' &&
+    t.splitLayout?.panes?.some(p => p.terminalId === terminalId)
+  )
+
+  if (!parentSplit) return false // Not in a split
+
+  const remainingPane = parentSplit.splitLayout.panes.find(
+    p => p.terminalId !== terminalId
+  )
+
+  if (remainingPane) {
+    // Collapse split
+    updateTerminal(parentSplit.id, {
+      splitLayout: { type: 'single', panes: [] }
+    })
+
+    updateTerminal(remainingPane.terminalId, {
+      isHidden: false
+    })
+
+    setActiveTerminal(remainingPane.terminalId)
+    setFocusedTerminal(remainingPane.terminalId)
+  } else {
+    // No remaining pane - close container
+    removeTerminal(parentSplit.id)
+  }
+
+  return true // Was in split, handled
+}
+```
+
+#### Phase 3: Update Tab Context Menu (15 minutes)
+
+**Remove detach from context menu for split tabs:**
+```typescript
+// src/SimpleTerminalApp.tsx - Context menu options
+
+const getContextMenuOptions = (terminal: StoredTerminal) => {
+  const options = [
+    {
+      label: 'Rename Tab',
+      icon: '✏️',
+      action: () => handleRenameTab(terminal.id)
+    },
+    // ... other options ...
+  ]
+
+  // Only add detach for non-split tabs (single terminals)
+  if (!terminal.splitLayout || terminal.splitLayout.type === 'single') {
+    options.push({
+      label: 'Detach (Keep Running)',
+      icon: '⊟',
+      action: () => handleDetachTab(terminal.id),
+      color: 'text-yellow-400'
+    })
+  }
+
+  return options
+}
+```
+
+**Note:** Keep `handleDetachTab` for simple tabs, but it now mostly delegates to `handleDetachTerminal`.
+
+#### Phase 4: Update Detached List Display (Optional - 30 minutes)
+
+If detached panes still show confusing names, improve display:
+
+```typescript
+// src/components/SessionsModal.tsx
+
+const getTerminalDisplayInfo = (terminal: StoredTerminal) => {
+  // Check if terminal was part of a split when detached
+  const wasSplit = terminal.lastAttachedWindowId &&
+                   terminal.splitLayout?.panes?.length > 0
+
+  return {
+    name: terminal.name,
+    subtitle: wasSplit ? '(was in split)' : null,
+    sessionName: terminal.sessionName,
+    detachedTime: terminal.lastActiveTime
+  }
+}
+```
+
+### Files to Modify
+
+**Frontend:**
+- `src/SimpleTerminalApp.tsx` - Footer reorganization, detach handler, context menu
+- `src/SimpleTerminalApp.css` - Footer layout (left/right split)
+- `src/utils/splitUtils.ts` (NEW) - Shared split collapse logic
+- `src/components/SessionsModal.tsx` (optional) - Better display for detached splits
+
+**No Backend Changes Required!** (Already has `/api/tmux/detach/:name`)
+
+### Testing Checklist
+
+**Footer Layout:**
+- [ ] Terminal controls on left (Info, Refresh, Detach, Pop Out, Close)
+- [ ] Customization on right (Font -, Font +, Reset, Customize)
+- [ ] Visual separation between sections
+- [ ] Buttons properly aligned
+
+**Detach Functionality:**
+- [ ] Detach button appears for active terminals
+- [ ] Detach button hidden for already-detached terminals
+- [ ] Single terminal: Detach removes from tab bar
+- [ ] Split terminal: Detach collapses split, promotes remaining pane
+- [ ] Detached terminals appear in sessions modal
+- [ ] Can reattach from sessions modal
+
+**Split Collapse:**
+- [ ] Left pane detached → right pane becomes full tab
+- [ ] Right pane detached → left pane becomes full tab
+- [ ] Active terminal switches to remaining pane
+- [ ] No orphaned split containers
+
+**Backward Compatibility:**
+- [ ] Tab context menu still works for non-split tabs
+- [ ] Pop out still works correctly
+- [ ] Close terminal still works correctly
+- [ ] All existing footer functionality preserved
+
+---
+
+## 🎯 UP NEXT: Unified Session Manager with Previews
 
 **Priority**: High (Innovative session management feature)
 **Estimated Time**: 4-6 hours
