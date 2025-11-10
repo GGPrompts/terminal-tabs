@@ -4,6 +4,7 @@ import { backgroundGradients } from '../styles/terminal-backgrounds'
 import { FontFamilyDropdown } from './FontFamilyDropdown'
 import { BackgroundGradientDropdown } from './BackgroundGradientDropdown'
 import { TextColorThemeDropdown } from './TextColorThemeDropdown'
+import { useSettingsStore } from '../stores/useSettingsStore'
 
 interface SpawnOption {
   label: string
@@ -42,6 +43,8 @@ const ICON_OPTIONS = [
 ]
 
 export function SettingsModal({ isOpen, onClose, onSave }: SettingsModalProps) {
+  const { workingDirectory, updateSettings } = useSettingsStore()
+  const [globalWorkingDir, setGlobalWorkingDir] = useState(workingDirectory)
   const [spawnOptions, setSpawnOptions] = useState<SpawnOption[]>([])
   const [originalOptions, setOriginalOptions] = useState<SpawnOption[]>([]) // Track original state
   const [isLoading, setIsLoading] = useState(true)
@@ -69,8 +72,9 @@ export function SettingsModal({ isOpen, onClose, onSave }: SettingsModalProps) {
   useEffect(() => {
     if (isOpen) {
       loadSpawnOptions()
+      setGlobalWorkingDir(workingDirectory)
     }
-  }, [isOpen])
+  }, [isOpen, workingDirectory])
 
   // Close icon picker when clicking outside
   useEffect(() => {
@@ -125,6 +129,10 @@ export function SettingsModal({ isOpen, onClose, onSave }: SettingsModalProps) {
     setIsSaving(true)
     setError(null)
     try {
+      // Save global settings
+      updateSettings({ workingDirectory: globalWorkingDir })
+
+      // Save spawn options
       const response = await fetch('/api/spawn-options', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -285,6 +293,25 @@ export function SettingsModal({ isOpen, onClose, onSave }: SettingsModalProps) {
             <div className="loading">Loading...</div>
           ) : !isAdding ? (
             <>
+              {/* Global Settings Section */}
+              <div className="global-settings-section">
+                <h3>🌍 Global Settings</h3>
+                <div className="global-setting">
+                  <label>
+                    Default Working Directory
+                    <input
+                      type="text"
+                      value={globalWorkingDir}
+                      onChange={(e) => setGlobalWorkingDir(e.target.value)}
+                      placeholder="~ (home directory)"
+                    />
+                    <span className="help-text">
+                      💡 Used when spawn options don't specify a directory. Supports ~ for home.
+                    </span>
+                  </label>
+                </div>
+              </div>
+
               <div className="options-list-header">
                 <h3>Spawn Options ({spawnOptions.length})</h3>
                 <button className="add-btn" onClick={() => setIsAdding(true)}>

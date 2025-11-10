@@ -531,6 +531,88 @@ router.get('/tmux/sessions/:name', asyncHandler(async (req, res) => {
 }));
 
 /**
+ * GET /api/tmux/sessions/:name/info - Get session info including pane title
+ */
+router.get('/tmux/sessions/:name/info', asyncHandler(async (req, res) => {
+  const { execSync } = require('child_process');
+  const { name: sessionName } = req.params;
+
+  try {
+    // Get pane info using tmux display-message
+    const cmd = `tmux display-message -p -t "${sessionName}" "#{pane_title}|#{window_name}|#{pane_current_path}"`;
+    const output = execSync(cmd, { encoding: 'utf8' }).trim();
+    const [paneTitle, windowName, currentPath] = output.split('|');
+
+    res.json({
+      success: true,
+      data: {
+        sessionName,
+        paneTitle: paneTitle || sessionName,
+        windowName: windowName || 'main',
+        currentPath: currentPath || '~',
+      }
+    });
+  } catch (error) {
+    res.status(404).json({
+      success: false,
+      error: `Failed to get info for session ${sessionName}: ${error.message}`
+    });
+  }
+}));
+
+/**
+ * GET /api/terminals/:id/cwd - Get current working directory for a terminal
+ */
+router.get('/terminals/:id/cwd', asyncHandler(async (req, res) => {
+  const { execSync } = require('child_process');
+  const fs = require('fs');
+  const { id } = req.params;
+  const agent = terminalRegistry.agents.get(id);
+
+  if (!agent) {
+    return res.status(404).json({
+      success: false,
+      error: `Terminal ${id} not found`
+    });
+  }
+
+  try {
+    let cwd = '~';
+
+    // For tmux sessions, use tmux display-message to get current path
+    if (agent.tmuxSessionName) {
+      const cmd = `tmux display-message -p -t "${agent.tmuxSessionName}" "#{pane_current_path}"`;
+      cwd = execSync(cmd, { encoding: 'utf8' }).trim();
+    }
+    // For non-tmux terminals, read from /proc/{pid}/cwd
+    else if (agent.pid) {
+      try {
+        cwd = fs.readlinkSync(`/proc/${agent.pid}/cwd`);
+      } catch (err) {
+        // Fallback to home directory if /proc is not available
+        cwd = process.env.HOME || '~';
+      }
+    }
+
+    res.json({
+      success: true,
+      data: {
+        terminalId: id,
+        cwd: cwd || '~'
+      }
+    });
+  } catch (error) {
+    res.json({
+      success: true,
+      data: {
+        terminalId: id,
+        cwd: '~' // Fallback to home
+      }
+    });
+  }
+}));
+
+/**
  * GET /api/tmux/sessions/:name/preview - Capture pane content for preview
  * Query params:
  * - lines: number of lines to capture (default: 100)

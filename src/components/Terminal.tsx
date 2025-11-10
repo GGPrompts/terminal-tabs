@@ -665,6 +665,9 @@ export const Terminal = React.forwardRef<any, TerminalProps>(
           xtermRef.current.write(keys);
         }
       },
+      getXtermInstance: () => {
+        return xtermRef.current;
+      },
     }));
 
     return (

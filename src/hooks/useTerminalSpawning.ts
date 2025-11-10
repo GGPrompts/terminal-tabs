@@ -81,13 +81,14 @@ export function useTerminalSpawning(
       const sessionName = useTmux ? generateSessionName(option.terminalType, option.label, option.command) : undefined
 
       // Create placeholder terminal IMMEDIATELY (before spawn)
+      const globalWorkingDir = useSettingsStore.getState().workingDirectory || '~'
       const newTerminal: StoredTerminal = {
         id: `terminal-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
         name: option.label,
         terminalType: option.terminalType,
         command: option.command, // Store original command for matching during reconnection
         icon: option.icon,
-        workingDir: option.workingDir || '~',
+        workingDir: option.workingDir || globalWorkingDir,
         theme: option.defaultTheme,
         background: option.defaultBackground || THEME_BACKGROUNDS[option.defaultTheme || 'default'] || 'dark-neutral',
         transparency: option.defaultTransparency,
@@ -114,7 +115,7 @@ export function useTerminalSpawning(
       const config: any = {
         terminalType: option.terminalType,
         name: option.label,
-        workingDir: option.workingDir || '~',
+        workingDir: option.workingDir || globalWorkingDir,
         theme: option.defaultTheme,
         transparency: option.defaultTransparency,
         size: { width: 800, height: 600 },  // Initial size (FitAddon will resize after opening)
@@ -202,11 +203,14 @@ export function useTerminalSpawning(
 
       console.log(`[useTerminalSpawning] Reconnecting terminal ${terminal.id} to session ${terminal.sessionName}`)
 
+      // Get global working directory setting
+      const globalWorkingDir = useSettingsStore.getState().workingDirectory || '~'
+
       // Build config with EXISTING sessionName (backend will detect and reconnect)
       const config: any = {
         terminalType: option.terminalType,
         name: option.label,
-        workingDir: terminal.workingDir || option.workingDir || '~',
+        workingDir: terminal.workingDir || option.workingDir || globalWorkingDir,
         theme: terminal.theme || option.defaultTheme,
         background: terminal.background || option.defaultBackground || THEME_BACKGROUNDS[terminal.theme || 'default'] || 'dark-neutral',
         transparency: terminal.transparency ?? option.defaultTransparency,

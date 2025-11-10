@@ -2,6 +2,7 @@ import { useCallback } from 'react';
 import { Terminal as XTerm } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import { getThemeForTerminalType } from '../styles/terminal-themes';
+import { refreshTerminalDisplay } from '../utils/terminalRefresh';
 
 /**
  * Hook for applying terminal theme changes.
@@ -36,49 +37,10 @@ export function useTerminalTheme(
       // Use the resize trick for ALL terminals to force complete redraw
       // This is the most reliable way to refresh the display after theme change
       setTimeout(() => {
-        if (xtermRef.current && fitAddonRef.current) {
-          // First refresh the content
-          xtermRef.current.refresh(0, xtermRef.current.rows - 1);
-
-          // Then do the resize trick to force complete redraw
-          setTimeout(() => {
-            if (fitAddonRef.current && xtermRef.current && wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-              const currentCols = xtermRef.current.cols;
-              const currentRows = xtermRef.current.rows;
-
-              // Resize xterm itself to trigger complete redraw
-              xtermRef.current.resize(currentCols - 1, currentRows);
-
-              // Send resize to PTY
-              wsRef.current.send(
-                JSON.stringify({
-                  type: "resize",
-                  terminalId: agentId,
-                  cols: currentCols - 1,
-                  rows: currentRows,
-                }),
-              );
-
-              // Wait a moment, then resize back to correct size
-              setTimeout(() => {
-                if (xtermRef.current && wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-                  xtermRef.current.resize(currentCols, currentRows);
-                  wsRef.current.send(
-                    JSON.stringify({
-                      type: "resize",
-                      terminalId: agentId,
-                      cols: currentCols,
-                      rows: currentRows,
-                    }),
-                  );
-                }
-              }, 100);
-            }
-          }, 150);
-        }
+        refreshTerminalDisplay(xtermRef.current, wsRef.current, agentId);
       }, 50);
     }
-  }, [xtermRef, fitAddonRef, wsRef, agentId, debouncedResize]);
+  }, [xtermRef, fitAddonRef, wsRef, agentId]);
 
   return applyTheme;
 }

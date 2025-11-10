@@ -693,6 +693,22 @@
   color: rgba(255, 255, 255, 0.5);
 }
 
+.spawn-workingdir {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.6);
+  font-family: 'Monaco', 'Menlo', 'Courier New', monospace;
+  margin-top: 4px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.workingdir-default {
+  color: rgba(245, 158, 11, 0.7);
+  font-style: italic;
+  font-size: 10px;
+}
+
 /* Terminal Display */
 .terminal-display {
   flex: 1;
@@ -804,6 +820,18 @@
   gap: 16px;
 }
 
+.footer-left {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex: 1;
+}
+
+.footer-right {
+  display: flex;
+  align-items: center;
+}
+
 .footer-terminal-info {
   display: flex;
   align-items: center;
@@ -836,6 +864,12 @@
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+.footer-separator {
+  color: rgba(255, 255, 255, 0.3);
+  font-size: 14px;
+  margin: 0 4px;
 }
 
 .font-size-display {

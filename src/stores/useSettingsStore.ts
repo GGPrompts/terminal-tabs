@@ -48,7 +48,7 @@ const defaultSettings: AppSettings = {
   useTmux: true, // Use tmux by default for better session persistence and resize handling
 
   // Directory settings
-  workingDirectory: "/home/matt",
+  workingDirectory: "~", // Default working directory for new terminals (can use ~ for home)
   directoryFavorites: [],
   fileFavorites: [],
 };

@@ -3,6 +3,7 @@ import './SimpleTerminalApp.css'
 import { Terminal } from './components/Terminal'
 import { SplitLayout } from './components/SplitLayout'
 import { SettingsModal } from './components/SettingsModal'
+import { TabContextMenu } from './components/TabContextMenu'
 import { FontFamilyDropdown } from './components/FontFamilyDropdown'
 import { BackgroundGradientDropdown } from './components/BackgroundGradientDropdown'
 import { TextColorThemeDropdown } from './components/TextColorThemeDropdown'
@@ -13,6 +14,7 @@ import SimpleSpawnService from './services/SimpleSpawnService'
 import { backgroundGradients, getBackgroundCSS } from './styles/terminal-backgrounds'
 import { THEME_BACKGROUNDS, TERMINAL_TYPE_ABBREVIATIONS, COMMAND_ABBREVIATIONS } from './constants/terminalConfig'
 import { generateWindowId, getCurrentWindowId, updateUrlWithWindowId } from './utils/windowUtils'
+import { refreshTerminalDisplay } from './utils/terminalRefresh'
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts'
 import { useTerminalSpawning } from './hooks/useTerminalSpawning'
 import { usePopout } from './hooks/usePopout'
@@ -70,12 +72,13 @@ interface SortableTabProps {
   isActive: boolean
   onActivate: () => void
   onClose: (e: React.MouseEvent) => void
+  onContextMenu: (e: React.MouseEvent, terminalId: string) => void
   dropZone: DropZone
   isDraggedOver: boolean
   mousePosition: React.MutableRefObject<{ x: number; y: number }>
 }
 
-function SortableTab({ terminal, isActive, onActivate, onClose, dropZone, isDraggedOver, mousePosition }: SortableTabProps) {
+function SortableTab({ terminal, isActive, onActivate, onClose, onContextMenu, dropZone, isDraggedOver, mousePosition }: SortableTabProps) {
   const {
     attributes,
     listeners,
@@ -171,6 +174,7 @@ function SortableTab({ terminal, isActive, onActivate, onClose, dropZone, isDrag
       data-tab-id={terminal.id}
       className={`tab ${isActive ? 'active' : ''} ${terminal.status === 'spawning' ? 'spawning' : ''} ${isDraggedOver ? 'drag-over' : ''} ${isBlocked ? 'merge-blocked' : ''}`}
       onClick={onActivate}
+      onContextMenu={(e) => onContextMenu(e, terminal.id)}
       {...attributes}
       {...listeners}
     >
@@ -231,6 +235,19 @@ function SimpleTerminalApp() {
   const [showCustomizePanel, setShowCustomizePanel] = useState(false)
   const [spawnOptions, setSpawnOptions] = useState<SpawnOption[]>([])
   const spawnOptionsRef = useRef<SpawnOption[]>([]) // Ref to avoid closure issues
+
+  // Context Menu state
+  const [contextMenu, setContextMenu] = useState<{
+    show: boolean
+    x: number
+    y: number
+    terminalId: string | null
+  }>({
+    show: false,
+    x: 0,
+    y: 0,
+    terminalId: null,
+  })
   const terminalRef = useRef<any>(null)
   const wsRef = useRef<WebSocket | null>(null) // Needed by both spawning and WebSocket hooks
   const pendingSpawns = useRef<Map<string, StoredTerminal>>(new Map()) // Track pending spawns by requestId
@@ -294,7 +311,7 @@ function SimpleTerminalApp() {
 
   // Expose store to window for testing (development only)
   useEffect(() => {
-    if (process.env.NODE_ENV === 'development') {
+    if (import.meta.env.DEV) {
       (window as any).terminalStore = useSimpleTerminalStore;
       console.log('[Dev] Terminal store exposed to window.terminalStore');
     }
@@ -704,6 +721,123 @@ function SimpleTerminalApp() {
     console.log(`[SimpleTerminalApp] Reset terminal "${displayTerminal.name}" to spawn-option defaults from "${spawnOption.label}"`, defaults)
   }
 
+  const handleRefresh = () => {
+    if (!displayTerminal || !terminalRef.current) return
+
+    // Get xterm instance from the terminal ref
+    const xtermInstance = terminalRef.current.getXtermInstance?.()
+    if (!xtermInstance) {
+      console.warn('[SimpleTerminalApp] Cannot refresh - no xterm instance')
+      return
+    }
+
+    // Use the resize trick to force complete redraw (fixes stuck TUI tools)
+    refreshTerminalDisplay(xtermInstance, wsRef.current, displayTerminal.agentId || '')
+    console.log(`[SimpleTerminalApp] Refreshed terminal "${displayTerminal.name}"`)
+  }
+
+  const handleClosePane = (paneTerminalId: string) => {
+    // Find the parent terminal (the one with splitLayout)
+    const parentTerminal = storedTerminals.find(t =>
+      t.splitLayout &&
+      t.splitLayout.type !== 'single' &&
+      t.splitLayout.panes.some(p => p.terminalId === paneTerminalId)
+    )
+
+    if (!parentTerminal || !parentTerminal.splitLayout || parentTerminal.splitLayout.type === 'single') {
+      console.warn('[SimpleTerminalApp] Could not find parent terminal for pane:', paneTerminalId)
+      return
+    }
+
+    const remainingPanes = parentTerminal.splitLayout.panes.filter(p => p.terminalId !== paneTerminalId)
+
+    if (remainingPanes.length === 1) {
+      // Only 1 pane left - convert to single terminal
+      console.log('[SimpleTerminalApp] Only 1 pane remaining after close, converting to single terminal')
+      updateTerminal(parentTerminal.id, {
+        splitLayout: { type: 'single', panes: [] }
+      })
+      // Unhide the remaining pane
+      const remainingPaneTerminalId = remainingPanes[0].terminalId
+      updateTerminal(remainingPaneTerminalId, { isHidden: false })
+    } else if (remainingPanes.length > 1) {
+      // Still have multiple panes
+      updateTerminal(parentTerminal.id, {
+        splitLayout: {
+          ...parentTerminal.splitLayout,
+          panes: remainingPanes
+        }
+      })
+    }
+
+    // Close the pane's terminal (will trigger backend cleanup)
+    handleCloseTerminal(paneTerminalId)
+  }
+
+  // Context Menu Handlers
+  const handleTabContextMenu = (e: React.MouseEvent, terminalId: string) => {
+    e.preventDefault()
+    setContextMenu({
+      show: true,
+      x: e.clientX,
+      y: e.clientY,
+      terminalId,
+    })
+  }
+
+  const handleContextMenuClose = () => {
+    setContextMenu({ show: false, x: 0, y: 0, terminalId: null })
+  }
+
+  const handleSplitVertical = async () => {
+    // TODO: Implement split vertical - fetch cwd, open spawn menu
+    console.log('[SimpleTerminalApp] Split Vertical not yet implemented')
+  }
+
+  const handleSplitHorizontal = async () => {
+    // TODO: Implement split horizontal - fetch cwd, open spawn menu
+    console.log('[SimpleTerminalApp] Split Horizontal not yet implemented')
+  }
+
+  const handleRenameTab = () => {
+    if (!contextMenu.terminalId) return
+    const terminal = storedTerminals.find(t => t.id === contextMenu.terminalId)
+    if (!terminal) return
+
+    const newName = prompt('Enter new tab name:', terminal.name)
+    if (newName && newName.trim()) {
+      updateTerminal(contextMenu.terminalId, { name: newName.trim() })
+    }
+  }
+
+  const handleRefreshNameFromTmux = async () => {
+    if (!contextMenu.terminalId) return
+    const terminal = storedTerminals.find(t => t.id === contextMenu.terminalId)
+    if (!terminal || !terminal.agentId) return
+
+    // Find the agent to get session name
+    const agent = agents.find(a => a.id === terminal.agentId)
+    if (!agent?.sessionName) {
+      alert('This terminal does not have a tmux session')
+      return
+    }
+
+    try {
+      const response = await fetch(`/api/tmux/sessions/${agent.sessionName}/info`)
+      const result = await response.json()
+
+      if (result.success && result.data.paneTitle) {
+        updateTerminal(contextMenu.terminalId, { name: result.data.paneTitle })
+        console.log(`[SimpleTerminalApp] Updated tab name from tmux: ${result.data.paneTitle}`)
+      } else {
+        alert('Failed to fetch pane title from tmux')
+      }
+    } catch (error) {
+      console.error('[SimpleTerminalApp] Error fetching tmux info:', error)
+      alert('Error fetching pane title from tmux')
+    }
+  }
+
   const handleThemeChange = (theme: string) => {
     if (!displayTerminal || !terminalRef.current) {
       console.warn('[SimpleTerminalApp] handleThemeChange called but displayTerminal or terminalRef.current is null', { displayTerminal: displayTerminal?.id, hasRef: !!terminalRef.current })
@@ -879,6 +1013,7 @@ function SimpleTerminalApp() {
                       e.stopPropagation()
                       handleCloseTerminal(terminal.id)
                     }}
+                    onContextMenu={handleTabContextMenu}
                     dropZone={dropZoneState?.terminalId === terminal.id ? dropZoneState.zone : null}
                     isDraggedOver={dropZoneState?.terminalId === terminal.id}
                     mousePosition={mousePosition}
@@ -910,19 +1045,29 @@ function SimpleTerminalApp() {
             <button onClick={() => setShowSpawnMenu(false)}>✕</button>
           </div>
           <div className="spawn-menu-list">
-            {spawnOptions.map((option, idx) => (
-              <div
-                key={idx}
-                className="spawn-option"
-                onClick={() => handleSpawnTerminal(option)}
-              >
-                <span className="spawn-icon">{option.icon}</span>
-                <div className="spawn-info">
-                  <div className="spawn-label">{option.label}</div>
-                  <div className="spawn-description">{option.description}</div>
+            {spawnOptions.map((option, idx) => {
+              const globalWorkingDir = useSettingsStore.getState().workingDirectory || '~'
+              const effectiveWorkingDir = option.workingDir || globalWorkingDir
+              const isUsingDefault = !option.workingDir
+
+              return (
+                <div
+                  key={idx}
+                  className="spawn-option"
+                  onClick={() => handleSpawnTerminal(option)}
+                >
+                  <span className="spawn-icon">{option.icon}</span>
+                  <div className="spawn-info">
+                    <div className="spawn-label">{option.label}</div>
+                    <div className="spawn-description">{option.description}</div>
+                    <div className="spawn-workingdir">
+                      📁 {effectiveWorkingDir}
+                      {isUsingDefault && <span className="workingdir-default"> (default)</span>}
+                    </div>
+                  </div>
                 </div>
-              </div>
-            ))}
+              )
+            })}
           </div>
         </div>
       )}
@@ -998,46 +1143,80 @@ function SimpleTerminalApp() {
       {/* App Footer - Shows focused/active terminal info and controls */}
       {displayTerminal && displayAgent && (
         <div className="app-footer">
-          <div className="footer-terminal-info">
-            <span className="footer-terminal-icon">
-              {displayTerminal.icon || '💻'}
-            </span>
-            <span className="footer-terminal-name">{displayAgent.name}</span>
-            <span className="footer-terminal-type">({displayAgent.terminalType})</span>
-            {displayAgent.pid && (
-              <span className="footer-terminal-pid">PID: {displayAgent.pid}</span>
-            )}
+          <div className="footer-left">
+            <div className="footer-terminal-info">
+              <span className="footer-terminal-icon">
+                {displayTerminal.icon || '💻'}
+              </span>
+              <span className="footer-terminal-name">{displayAgent.name}</span>
+              <span className="footer-terminal-type">({displayAgent.terminalType})</span>
+              {displayAgent.pid && (
+                <span className="footer-terminal-pid">PID: {displayAgent.pid}</span>
+              )}
+            </div>
+
+            <div className="footer-controls">
+              {/* Font Size Controls */}
+              <button
+                className="footer-control-btn"
+                onClick={() => handleFontSizeChange(-1)}
+                title="Decrease font size"
+                disabled={!displayTerminal.fontSize || displayTerminal.fontSize <= 10}
+              >
+                −
+              </button>
+              <span className="font-size-display">{displayTerminal.fontSize || useSettingsStore.getState().terminalDefaultFontSize}px</span>
+              <button
+                className="footer-control-btn"
+                onClick={() => handleFontSizeChange(1)}
+                title="Increase font size"
+                disabled={!!displayTerminal.fontSize && displayTerminal.fontSize >= 24}
+              >
+                +
+              </button>
+
+              {/* Reset to Defaults Button */}
+              <button
+                className="footer-control-btn"
+                onClick={handleResetToDefaults}
+                title="Reset to spawn-option defaults (theme, font, transparency)"
+              >
+                ↺
+              </button>
+
+              {/* Refresh Button */}
+              <button
+                className="footer-control-btn"
+                onClick={handleRefresh}
+                title="Refresh display (fixes stuck terminals)"
+              >
+                🔄
+              </button>
+
+              {/* Split Pane Controls - Only show when focused terminal is in a split */}
+              {focusedTerminalId && displayTerminal.splitLayout && displayTerminal.splitLayout.type !== 'single' && (
+                <>
+                  <span className="footer-separator">│</span>
+                  <button
+                    className="footer-control-btn"
+                    onClick={() => handlePopOutTab(focusedTerminalId)}
+                    title="Pop out focused pane to new tab"
+                  >
+                    ↗
+                  </button>
+                  <button
+                    className="footer-control-btn"
+                    onClick={() => handleClosePane(focusedTerminalId)}
+                    title="Close focused pane"
+                  >
+                    ✕
+                  </button>
+                </>
+              )}
+            </div>
           </div>
 
-          <div className="footer-controls">
-            {/* Font Size Controls */}
-            <button
-              className="footer-control-btn"
-              onClick={() => handleFontSizeChange(-1)}
-              title="Decrease font size"
-              disabled={!displayTerminal.fontSize || displayTerminal.fontSize <= 10}
-            >
-              −
-            </button>
-            <span className="font-size-display">{displayTerminal.fontSize || useSettingsStore.getState().terminalDefaultFontSize}px</span>
-            <button
-              className="footer-control-btn"
-              onClick={() => handleFontSizeChange(1)}
-              title="Increase font size"
-              disabled={!!displayTerminal.fontSize && displayTerminal.fontSize >= 24}
-            >
-              +
-            </button>
-
-            {/* Reset to Defaults Button */}
-            <button
-              className="footer-control-btn"
-              onClick={handleResetToDefaults}
-              title="Reset to spawn-option defaults (theme, font, transparency)"
-            >
-              ↺
-            </button>
-
+          <div className="footer-right">
             {/* Customize Panel Toggle */}
             <button
               className="footer-control-btn"
@@ -1103,6 +1282,25 @@ function SimpleTerminalApp() {
               </label>
             </div>
           </div>
+      )}
+
+      {/* Tab Context Menu */}
+      {contextMenu.show && contextMenu.terminalId && (
+        <TabContextMenu
+          x={contextMenu.x}
+          y={contextMenu.y}
+          terminalId={contextMenu.terminalId}
+          terminalName={storedTerminals.find(t => t.id === contextMenu.terminalId)?.name || 'Terminal'}
+          agentId={storedTerminals.find(t => t.id === contextMenu.terminalId)?.agentId || null}
+          sessionName={agents.find(a => a.id === storedTerminals.find(t => t.id === contextMenu.terminalId)?.agentId)?.sessionName}
+          onClose={handleContextMenuClose}
+          onSplitVertical={handleSplitVertical}
+          onSplitHorizontal={handleSplitHorizontal}
+          onRename={handleRenameTab}
+          onRefreshName={handleRefreshNameFromTmux}
+          onPopOut={() => handlePopOutTab(contextMenu.terminalId!)}
+          onCloseTab={() => handleCloseTerminal(contextMenu.terminalId!)}
+        />
       )}
     </div>
   )
