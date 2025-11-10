@@ -185,7 +185,7 @@ function SortableTab({ terminal, isActive, onActivate, onClose, onContextMenu, d
       ref={setNodeRef}
       style={style}
       data-tab-id={terminal.id}
-      className={`tab ${isActive ? 'active' : ''} ${terminal.status === 'spawning' ? 'spawning' : ''} ${isDraggedOver ? 'drag-over' : ''} ${isBlocked ? 'merge-blocked' : ''}`}
+      className={`tab ${isActive ? 'active' : ''} ${terminal.status === 'spawning' ? 'spawning' : ''} ${isDraggedOver ? 'drag-over' : ''} ${isBlocked ? 'merge-blocked' : ''} ${terminal.isDetached ? 'detached' : ''}`}
       onClick={onActivate}
       onContextMenu={(e) => onContextMenu(e, terminal.id)}
       {...attributes}
@@ -193,13 +193,20 @@ function SortableTab({ terminal, isActive, onActivate, onClose, onContextMenu, d
     >
       {renderTabIcon()}
       <span className="tab-label">{terminal.name}</span>
-      <button
-        className="tab-close"
-        onClick={onClose}
-        onPointerDown={(e) => e.stopPropagation()}
-      >
-        ✕
-      </button>
+
+      {/* Only show buttons for non-detached tabs */}
+      {!terminal.isDetached && (
+        <>
+          <button
+            className="tab-close"
+            onClick={onClose}
+            onPointerDown={(e) => e.stopPropagation()}
+            title="Close terminal (kill session)"
+          >
+            ✕
+          </button>
+        </>
+      )}
 
       {/* Drop Zone Overlay - shows when dragging over this tab for splits */}
       {isDraggedOver && dropZone && !isBlocked && isEdgeZone && (
@@ -293,6 +300,9 @@ function SimpleTerminalApp() {
     const filtered = storedTerminals.filter(t => {
       // Hidden terminals (split panes) are never visible in tab bar
       if (t.isHidden) return false
+
+      // Detached terminals (windowId === null) appear in ALL windows
+      if (t.isDetached && !t.windowId) return true
 
       // Terminals without a windowId belong to the main window (backwards compatibility)
       const terminalWindow = t.windowId || 'main'
@@ -600,6 +610,94 @@ function SimpleTerminalApp() {
       }
     }
     removeTerminal(terminalId)
+  }
+
+  const handleDetachTab = async (terminalId: string) => {
+    const terminal = storedTerminals.find(t => t.id === terminalId)
+    if (!terminal?.sessionName) {
+      console.warn('[handleDetachTab] Terminal has no session, cannot detach')
+      return
+    }
+
+    try {
+      console.log(`⊟ Detaching terminal: ${terminal.name} (${terminal.sessionName})`)
+
+      // Call backend to detach from tmux session
+      const response = await fetch(`http://localhost:8127/api/tmux/detach/${terminal.sessionName}`, {
+        method: 'POST'
+      })
+
+      if (!response.ok) {
+        throw new Error(`Failed to detach: ${response.statusText}`)
+      }
+
+      // Update terminal state: mark as detached, clear windowId to show in all windows
+      updateTerminal(terminalId, {
+        isDetached: true,
+        windowId: null,  // null = show in all windows!
+        lastActiveTime: Date.now(),
+        lastAttachedWindowId: currentWindowId,
+        agentId: undefined  // Clear WebSocket agent ID
+      })
+
+      // Close WebSocket agent if exists
+      const agent = webSocketAgents.get(terminal.agentId)
+      if (agent?.ws) {
+        agent.ws.send(JSON.stringify({
+          type: 'disconnect',
+          id: terminal.agentId
+        }))
+      }
+      webSocketAgents.delete(terminal.agentId)
+
+      // If this was the active tab, switch to another non-detached tab
+      if (activeTerminalId === terminalId) {
+        const nextTab = visibleTerminals.find(t => t.id !== terminalId && !t.isDetached)
+        setActiveTerminal(nextTab?.id || null)
+      }
+
+      console.log(`✅ Detached terminal: ${terminal.name}`)
+    } catch (error) {
+      console.error('[handleDetachTab] Error detaching terminal:', error)
+      alert(`Failed to detach terminal: ${error}`)
+    }
+  }
+
+  const handleReattachTab = async (terminalId: string) => {
+    const terminal = storedTerminals.find(t => t.id === terminalId)
+    if (!terminal?.sessionName || !terminal.isDetached) {
+      console.warn('[handleReattachTab] Terminal is not detached or has no session')
+      return
+    }
+
+    console.log(`🔄 Reattaching terminal: ${terminal.name} (${terminal.sessionName})`)
+
+    // Update terminal state: mark as active, assign to current window
+    updateTerminal(terminalId, {
+      isDetached: false,
+      windowId: currentWindowId,
+      status: 'spawning',  // Triggers reconnection logic
+      lastActiveTime: Date.now()
+    })
+
+    // Set as active tab
+    setActiveTerminal(terminalId)
+
+    // Reconnection will happen automatically via useWebSocketManager
+    // because status changed to 'spawning' and terminal has sessionName
+    console.log(`✅ Reattached terminal: ${terminal.name} to window ${currentWindowId}`)
+  }
+
+  const handleTabClick = (terminalId: string) => {
+    const terminal = storedTerminals.find(t => t.id === terminalId)
+
+    if (terminal?.isDetached) {
+      // Detached tab clicked → reattach it
+      handleReattachTab(terminalId)
+    } else {
+      // Normal tab clicked → set as active
+      setActiveTerminal(terminalId)
+    }
   }
 
   // Keyboard shortcuts (extracted to custom hook)
@@ -1226,7 +1324,7 @@ function SimpleTerminalApp() {
                     key={terminal.id}
                     terminal={terminal}
                     isActive={terminal.id === activeTerminalId}
-                    onActivate={() => setActiveTerminal(terminal.id)}
+                    onActivate={() => handleTabClick(terminal.id)}
                     onClose={(e) => {
                       e.stopPropagation()
                       handleCloseTerminal(terminal.id)
@@ -1615,6 +1713,7 @@ function SimpleTerminalApp() {
           onSplitHorizontal={handleSplitHorizontal}
           onRename={handleRenameTab}
           onRefreshName={handleRefreshNameFromTmux}
+          onDetach={() => handleDetachTab(contextMenu.terminalId!)}
           onPopOut={() => handlePopOutTab(contextMenu.terminalId!)}
           onCloseTab={() => handleCloseTerminal(contextMenu.terminalId!)}
         />

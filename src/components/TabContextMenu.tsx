@@ -13,6 +13,7 @@ interface TabContextMenuProps {
   onSplitHorizontal: () => void;
   onRename: () => void;
   onRefreshName: () => void;
+  onDetach: () => void;
   onPopOut: () => void;
   onCloseTab: () => void;
 }
@@ -29,6 +30,7 @@ export function TabContextMenu({
   onSplitHorizontal,
   onRename,
   onRefreshName,
+  onDetach,
   onPopOut,
   onCloseTab,
 }: TabContextMenuProps) {
@@ -122,6 +124,11 @@ export function TabContextMenu({
       )}
 
       <div className="context-menu-separator" />
+
+      <div className="context-menu-item" onClick={() => handleMenuClick(onDetach)}>
+        <span className="menu-icon">⊟</span>
+        <span>Detach (Keep Running)</span>
+      </div>
 
       <div className="context-menu-item" onClick={() => handleMenuClick(onPopOut)}>
         <span className="menu-icon">↗</span>

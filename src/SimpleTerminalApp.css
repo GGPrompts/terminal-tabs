@@ -318,6 +318,28 @@
   z-index: 1;
 }
 
+/* Detached tabs (grayed out, visible in all windows) */
+.tab.detached {
+  opacity: 0.5;
+  font-style: italic;
+  background: rgba(128, 128, 128, 0.1);
+  border-color: rgba(128, 128, 128, 0.3);
+  cursor: pointer;
+}
+
+.tab.detached:hover {
+  opacity: 0.7;
+  background: rgba(128, 128, 128, 0.15);
+  border-color: rgba(128, 128, 128, 0.4);
+}
+
+.tab.detached .tab-label::after {
+  content: ' ⊟';  /* Minimize icon indicates detached state */
+  opacity: 0.6;
+  font-size: 0.9em;
+  font-style: normal;
+}
+
 /* Single terminal icon (default) */
 .tab-icon-single {
   font-size: 16px;

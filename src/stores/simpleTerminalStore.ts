@@ -33,6 +33,11 @@ export interface Terminal {
   isHidden?: boolean; // Hide from tab bar (e.g., when part of a split)
   windowId?: string; // Which browser window/tab this terminal belongs to (for multi-window support)
 
+  // Detached sessions (run in background, visible in all windows)
+  isDetached?: boolean; // Is this session detached from UI?
+  lastActiveTime?: number; // Timestamp of last activity (for sorting/cleanup)
+  lastAttachedWindowId?: string; // Which window last had it (for smart reattach defaults)
+
   // Split layout data (Phase 1 of split layout system)
   splitLayout?: SplitLayout;
 }
