@@ -59,7 +59,7 @@ interface SimpleTerminalState {
 
 export const useSimpleTerminalStore = create<SimpleTerminalState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       terminals: [],
       activeTerminalId: null,
       focusedTerminalId: null,
@@ -118,3 +118,29 @@ export const useSimpleTerminalStore = create<SimpleTerminalState>()(
     }
   )
 );
+
+// Cross-window synchronization: Listen for localStorage changes from other windows
+if (typeof window !== 'undefined') {
+  window.addEventListener('storage', (e) => {
+    // Only sync if the changed key is our store's key
+    if (e.key === 'simple-terminal-storage' && e.newValue) {
+      try {
+        const newState = JSON.parse(e.newValue)
+
+        // Update the store with the new state from the other window
+        // This triggers re-renders in all components using the store
+        useSimpleTerminalStore.setState({
+          terminals: newState.state.terminals || [],
+          activeTerminalId: newState.state.activeTerminalId || null,
+        })
+
+        console.log('[Store] Synced from other window:', {
+          terminals: newState.state.terminals?.length || 0,
+          activeTerminalId: newState.state.activeTerminalId
+        })
+      } catch (error) {
+        console.error('[Store] Failed to sync from other window:', error)
+      }
+    }
+  })
+}
