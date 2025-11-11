@@ -1549,6 +1549,14 @@ function SimpleTerminalApp() {
           </span>
         </div>
 
+        <button
+          className="session-manager-button"
+          onClick={() => setShowDetachedModal(true)}
+          title="Session Manager - View all sessions across windows"
+        >
+          📂
+        </button>
+
         <div className="header-actions">
           <button
             className="clear-sessions-button"
@@ -2076,16 +2084,20 @@ function SimpleTerminalApp() {
         />
       )}
 
-      {/* Session Manager Modal (Detached + Orphaned Sessions) */}
+      {/* Session Manager Modal (Active + Detached + Orphaned Sessions) */}
       <DetachedSessionsModal
         isOpen={showDetachedModal}
         onClose={() => setShowDetachedModal(false)}
+        activeSessions={visibleTerminals}
+        currentWindowId={currentWindowId}
         detachedSessions={detachedSessions}
         orphanedSessions={orphanedSessions}
         onReattach={handleReattachMultiple}
         onKill={handleKillSession}
         onAdoptOrphans={handleAdoptOrphans}
         onKillOrphans={handleKillOrphans}
+        onMoveToWindow={(terminalId) => updateTerminal(terminalId, { windowId: currentWindowId })}
+        onDetach={handleDetachTab}
       />
     </div>
   )

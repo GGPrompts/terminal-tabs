@@ -234,6 +234,22 @@
   gap: 8px;
 }
 
+/* Active Sessions Group */
+.active-group .session-group-header {
+  background: rgba(34, 197, 94, 0.1);
+  border-bottom-color: rgba(34, 197, 94, 0.2);
+}
+
+.active-session-item {
+  border-color: rgba(34, 197, 94, 0.2);
+}
+
+.detach-btn:hover {
+  background: rgba(245, 158, 11, 0.2);
+  border-color: rgba(245, 158, 11, 0.4);
+  color: #ffb84d;
+}
+
 /* Orphan-specific styles */
 .orphan-group .detached-session-item.selected {
   background: rgba(255, 107, 107, 0.15);

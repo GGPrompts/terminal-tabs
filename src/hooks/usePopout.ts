@@ -118,7 +118,7 @@ export function usePopout(
       await Promise.all(
         sessionsToDetach.map(async (sessionName) => {
           try {
-            const response = await fetch(`/api/tmux/detach/${sessionName}`, {
+            const response = await fetch(`http://localhost:8127/api/tmux/detach/${sessionName}`, {
               method: 'POST',
             })
             const result = await response.json()

@@ -5,26 +5,34 @@ import { Terminal as StoredTerminal } from '../stores/simpleTerminalStore'
 interface DetachedSessionsModalProps {
   isOpen: boolean
   onClose: () => void
+  activeSessions: StoredTerminal[]  // NEW
+  currentWindowId: string  // NEW
   detachedSessions: StoredTerminal[]
-  orphanedSessions: string[]  // NEW: Array of tmux session names
+  orphanedSessions: string[]
   onReattach: (terminalIds: string[]) => void
   onKill: (terminalIds: string[]) => void
-  onAdoptOrphans: (sessionNames: string[]) => void  // NEW
-  onKillOrphans: (sessionNames: string[]) => void  // NEW
+  onAdoptOrphans: (sessionNames: string[]) => void
+  onKillOrphans: (sessionNames: string[]) => void
+  onMoveToWindow: (terminalId: string) => void  // NEW
+  onDetach: (terminalId: string) => void  // NEW
 }
 
 export function DetachedSessionsModal({
   isOpen,
   onClose,
+  activeSessions,
+  currentWindowId,
   detachedSessions,
   orphanedSessions,
   onReattach,
   onKill,
   onAdoptOrphans,
   onKillOrphans,
+  onMoveToWindow,
+  onDetach,
 }: DetachedSessionsModalProps) {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
-  const [orphanSelectedIds, setOrphanSelectedIds] = useState<Set<string>>(new Set())  // NEW
+  const [orphanSelectedIds, setOrphanSelectedIds] = useState<Set<string>>(new Set())
 
   // Close on Escape key
   useEffect(() => {
@@ -140,6 +148,49 @@ export function DetachedSessionsModal({
             ✕
           </button>
         </div>
+
+        {/* Active Sessions Group */}
+        {activeSessions.length > 0 && (
+          <div className="session-group active-group">
+            <div className="session-group-header">
+              <span>🟢 Active Sessions ({activeSessions.length})</span>
+            </div>
+            <div className="detached-sessions-list">
+              {activeSessions.map(terminal => (
+                <div
+                  key={terminal.id}
+                  className="detached-session-item active-session-item"
+                >
+                  <span className="detached-icon">{terminal.icon || '💻'}</span>
+                  <div className="detached-session-info">
+                    <div className="detached-name">{terminal.name}</div>
+                    <div className="detached-details">
+                      {terminal.sessionName} · {(terminal.windowId || 'main') === currentWindowId ? 'This window' : `Window: ${terminal.windowId}`}
+                    </div>
+                  </div>
+                  <button
+                    className="detached-action-btn detach-btn"
+                    onClick={() => onDetach(terminal.id)}
+                    title="Detach this session"
+                  >
+                    ⊟ Detach
+                  </button>
+                  <button
+                    className="detached-action-btn kill-btn"
+                    onClick={() => {
+                      if (confirm(`Kill session "${terminal.name}"? This cannot be undone.`)) {
+                        onKill([terminal.id])
+                      }
+                    }}
+                    title="Kill this session"
+                  >
+                    ✕ Kill
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Detached Sessions Group */}
         <div className="session-group">
