@@ -2078,7 +2078,6 @@ function SimpleTerminalApp() {
           onSplitHorizontal={handleSplitHorizontal}
           onRename={handleRenameTab}
           onRefreshName={handleRefreshNameFromTmux}
-          onDetach={() => handleDetachTab(contextMenu.terminalId!)}
           onPopOut={() => handlePopOutTab(contextMenu.terminalId!)}
           onCloseTab={() => handleCloseTerminal(contextMenu.terminalId!)}
         />
