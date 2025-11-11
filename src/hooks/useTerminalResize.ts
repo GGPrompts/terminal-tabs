@@ -34,7 +34,7 @@ export function useTerminalResize(
    * Handle window resize and send dimensions to backend
    */
   const handleResize = useCallback(() => {
-    if (fitAddonRef.current && xtermRef.current) {
+    if (fitAddonRef.current && xtermRef.current && xtermRef.current.element) {
       fitAddonRef.current.fit();
 
       // Send resize dimensions to backend
@@ -84,7 +84,7 @@ export function useTerminalResize(
     }
 
     roRef.current = new ResizeObserver((entries) => {
-      if (fitAddonRef.current && xtermRef.current) {
+      if (fitAddonRef.current && xtermRef.current && xtermRef.current.element) {
         // Get the actual dimensions from the resize entry
         const entry = entries[0];
         if (
@@ -134,8 +134,8 @@ export function useTerminalResize(
       try {
         roRef.current = new ResizeObserver(() => {
           try {
-            fitAddonRef.current?.fit();
-            if (xtermRef.current) {
+            if (fitAddonRef.current && xtermRef.current && xtermRef.current.element) {
+              fitAddonRef.current.fit();
               // Use debounced resize handler
               debouncedResize(
                 agentId,
@@ -193,11 +193,15 @@ export function useTerminalResize(
   useEffect(() => {
     if (!xtermRef.current || !fitAddonRef.current) return;
 
-    // Wait for DOM to settle after hot refresh
+    // Wait for DOM to settle after hot refresh (and for popout windows to initialize)
+    // Increased to 600ms to ensure xterm.open() retry logic completes (max 10 * 50ms = 500ms)
     const timer = setTimeout(() => {
       try {
         const parent = terminalRef.current?.parentElement;
-        if (parent && parent.clientWidth > 0 && parent.clientHeight > 0) {
+        // CRITICAL: Check that terminal container has real dimensions (not 0x0)
+        // AND that xterm has been opened (has buffer)
+        if (parent && parent.clientWidth > 0 && parent.clientHeight > 0 &&
+            xtermRef.current && xtermRef.current.element) {
           fitAddonRef.current?.fit();
           xtermRef.current?.refresh(0, xtermRef.current.rows - 1);
 
@@ -216,7 +220,7 @@ export function useTerminalResize(
       } catch (err) {
         console.debug('[Terminal] Hot refresh fit error:', err);
       }
-    }, 100);
+    }, 600); // Increased from 100ms to allow popout window initialization
 
     return () => clearTimeout(timer);
   }, []); // Empty deps - only run once after mount
