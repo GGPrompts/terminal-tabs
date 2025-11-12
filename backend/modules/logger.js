@@ -25,30 +25,12 @@ if (process.env.LOG_FILE) {
 
 // Create logger instance with custom formatting
 const logger = createConsola({
-  level: process.env.LOG_LEVEL || 4, // 0=silent, 1=fatal, 2=error, 3=warn, 4=info, 5=debug
-  fancy: true,
+  level: parseInt(process.env.LOG_LEVEL) || 4, // 0=silent, 1=fatal, 2=error, 3=warn, 4=info, 5=debug
+  fancy: false, // Use simple output for better compatibility with tmux
   formatOptions: {
     colors: true,
-    compact: false,
-    date: true,
+    compact: true,
   },
-  reporters: logStream ? [
-    // Console reporter (with colors)
-    {
-      log: (logObj) => {
-        const defaultReporter = require('consola/reporters').FancyReporter;
-        new defaultReporter().log(logObj);
-
-        // Also write to file (without colors for readability)
-        if (logStream) {
-          const timestamp = new Date().toISOString();
-          const level = logObj.type.toUpperCase().padEnd(7);
-          const message = typeof logObj.args[0] === 'string' ? logObj.args[0] : JSON.stringify(logObj.args[0]);
-          logStream.write(`${timestamp} ${level} ${message}\n`);
-        }
-      }
-    }
-  ] : undefined,
 });
 
 // Custom log tags for different modules

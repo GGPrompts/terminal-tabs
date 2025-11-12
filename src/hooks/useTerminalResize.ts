@@ -225,8 +225,12 @@ export function useTerminalResize(
    * Listen for custom container resize events from wrapper
    */
   useEffect(() => {
-    const handleContainerResized = (e: CustomEvent) => {
-      if (e.detail.id === agentId && fitAddonRef.current) {
+    const handleContainerResized = (e: Event) => {
+      // Handle both CustomEvent (with detail.id) and plain Event (for splits)
+      const customEvent = e as CustomEvent;
+      const shouldRefit = !customEvent.detail || customEvent.detail.id === agentId;
+
+      if (shouldRefit && fitAddonRef.current) {
         // Small timeout allows DOM layout to settle
         requestAnimationFrame(() => {
           try {

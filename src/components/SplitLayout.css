@@ -27,17 +27,26 @@
 .split-pane-bottom {
   display: flex;
   flex-direction: column;
+  /* Ensure equal background - no overlays or darkening */
+  background: transparent;
+  isolation: isolate; /* Create stacking context to prevent z-index issues */
 }
 
 /* Resizable Box Overrides */
 .split-pane .react-resizable {
   position: relative;
+  background: transparent; /* Prevent any background from ResizableBox */
+}
+
+/* Ensure no overlays from react-resizable library */
+.split-pane .react-resizable > div {
+  background: transparent !important;
 }
 
 /* Resize Handle Styling */
 .react-resizable-handle {
   position: absolute;
-  z-index: 10;
+  z-index: 50; /* Increased to be above focus indicators */
   background: transparent;
   transition: background 0.15s ease;
 }
@@ -138,6 +147,12 @@ body.react-resizable-resizing.react-resizable-resizing-s {
   transition: width 0.1s ease, height 0.1s ease;
 }
 
+/* Prevent any pseudo-elements from react-resizable that might darken */
+.react-resizable::before,
+.react-resizable::after {
+  display: none !important;
+}
+
 /* Focus Indicators - show which pane is focused */
 .react-resizable-handle::after {
   content: '';
@@ -175,7 +190,7 @@ body.react-resizable-resizing.react-resizable-resizing-s {
   box-shadow: 2px 0 8px rgba(59, 130, 246, 0.6);
   transition: all 0.2s ease;
   pointer-events: none;
-  z-index: 11;
+  z-index: 40; /* Below resize handle (50) but above panes */
 }
 
 /* Horizontal split focus indicators (top/bottom) */
@@ -206,7 +221,7 @@ body.react-resizable-resizing.react-resizable-resizing-s {
   box-shadow: 0 2px 8px rgba(59, 130, 246, 0.6);
   transition: all 0.2s ease;
   pointer-events: none;
-  z-index: 11;
+  z-index: 40; /* Below resize handle (50) but above panes */
 }
 
 /* Pane button container */

@@ -1572,11 +1572,7 @@ function SimpleTerminalApp() {
                 >
                   <SplitLayout
                     terminal={terminal}
-                    terminals={storedTerminals.filter(t => {
-                      // Only pass terminals from this window to prevent cross-window rendering
-                      const terminalWindow = t.windowId || 'main'
-                      return terminalWindow === currentWindowId
-                    })}
+                    terminals={visibleTerminals}
                     agents={webSocketAgents}
                     onClose={handleCloseTerminal}
                     onPopOut={handlePopOutPane}

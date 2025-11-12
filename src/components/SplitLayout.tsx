@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, memo } from 'react';
 import { ResizableBox } from 'react-resizable';
 import 'react-resizable/css/styles.css';
 import './SplitLayout.css';
@@ -21,7 +21,7 @@ interface SplitLayoutProps {
   activeTerminalId: string | null;
 }
 
-export const SplitLayout: React.FC<SplitLayoutProps> = ({
+const SplitLayoutComponent: React.FC<SplitLayoutProps> = ({
   terminal,
   terminals,
   agents,
@@ -36,6 +36,35 @@ export const SplitLayout: React.FC<SplitLayoutProps> = ({
   const [containerWidth, setContainerWidth] = useState(0);
   const [containerHeight, setContainerHeight] = useState(0);
   const { updateTerminal, focusedTerminalId, setFocusedTerminal, removeTerminal } = useSimpleTerminalStore();
+
+  // Debounce terminal refit events to prevent excessive re-renders during drag
+  const refitTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const lastRefitTimeRef = useRef<number>(0);
+
+  const triggerTerminalRefit = () => {
+    if (refitTimeoutRef.current) {
+      clearTimeout(refitTimeoutRef.current);
+    }
+    refitTimeoutRef.current = setTimeout(() => {
+      window.dispatchEvent(new Event('terminal-container-resized'));
+      lastRefitTimeRef.current = Date.now();
+    }, 150); // Wait 150ms after last resize before refitting
+  };
+
+  // Throttled version for live resize events (max 10 times per second)
+  const triggerTerminalRefitThrottled = () => {
+    const now = Date.now();
+    const timeSinceLastRefit = now - lastRefitTimeRef.current;
+
+    // Only trigger if it's been at least 100ms since last refit
+    if (timeSinceLastRefit >= 100) {
+      window.dispatchEvent(new Event('terminal-container-resized'));
+      lastRefitTimeRef.current = now;
+    } else {
+      // Otherwise schedule a debounced refit
+      triggerTerminalRefit();
+    }
+  };
 
   // Handle closing a pane in a split
   const handleClosePane = (paneTerminalId: string) => {
@@ -65,25 +94,11 @@ export const SplitLayout: React.FC<SplitLayoutProps> = ({
 
   const { splitLayout } = terminal;
 
-  // Debug: Log split layout when rendering
-  if (splitLayout && splitLayout.type !== 'single') {
-    console.log('[SplitLayout] Rendering split:', {
-      terminalId: terminal.id.slice(-8),
-      type: splitLayout.type,
-      panes: splitLayout.panes.map(p => ({
-        terminalId: p.terminalId.slice(-8),
-        position: p.position
-      })),
-      hasAgent: !!terminal.agentId,
-      agentId: terminal.agentId?.slice(-8),
-      allTerminals: terminals.map(t => ({
-        id: t.id.slice(-8),
-        isHidden: t.isHidden,
-        hasAgent: !!t.agentId,
-        agentId: t.agentId?.slice(-8)
-      }))
-    });
-  }
+  // Debug: Log split layout when rendering (REMOVED - was causing spam)
+  // Performance: This was logging on every render, causing console spam during resize
+  // if (splitLayout && splitLayout.type !== 'single') {
+  //   console.log('[SplitLayout] Rendering split:', {...});
+  // }
 
   // Measure container dimensions
   useEffect(() => {
@@ -103,6 +118,10 @@ export const SplitLayout: React.FC<SplitLayoutProps> = ({
 
     return () => {
       resizeObserver.disconnect();
+      // Clean up any pending refit timeout
+      if (refitTimeoutRef.current) {
+        clearTimeout(refitTimeoutRef.current);
+      }
     };
   }, []);
 
@@ -202,6 +221,10 @@ export const SplitLayout: React.FC<SplitLayoutProps> = ({
           axis="x"
           minConstraints={[200, containerHeight]}
           maxConstraints={[containerWidth - 200, containerHeight]}
+          onResize={(e, data) => {
+            // Live update during drag with throttling (max 10 refits/sec)
+            triggerTerminalRefitThrottled();
+          }}
           onResizeStop={(e, data) => {
             const newSize = (data.size.width / containerWidth) * 100;
             updateTerminal(terminal.id, {
@@ -214,8 +237,8 @@ export const SplitLayout: React.FC<SplitLayoutProps> = ({
               },
             });
 
-            // Trigger xterm refit for both terminals
-            window.dispatchEvent(new Event('terminal-container-resized'));
+            // Final refit after resize completes
+            triggerTerminalRefit();
           }}
           resizeHandles={['e']}
           className={`split-pane split-pane-left ${leftTerminal.id === focusedTerminalId ? 'focused' : ''}`}
@@ -337,6 +360,10 @@ export const SplitLayout: React.FC<SplitLayoutProps> = ({
           axis="y"
           minConstraints={[containerWidth, 200]}
           maxConstraints={[containerWidth, containerHeight - 200]}
+          onResize={(e, data) => {
+            // Live update during drag with throttling (max 10 refits/sec)
+            triggerTerminalRefitThrottled();
+          }}
           onResizeStop={(e, data) => {
             const newSize = (data.size.height / containerHeight) * 100;
             updateTerminal(terminal.id, {
@@ -349,8 +376,8 @@ export const SplitLayout: React.FC<SplitLayoutProps> = ({
               },
             });
 
-            // Trigger xterm refit for both terminals
-            window.dispatchEvent(new Event('terminal-container-resized'));
+            // Final refit after resize completes
+            triggerTerminalRefit();
           }}
           resizeHandles={['s']}
           className={`split-pane split-pane-top ${topTerminal.id === focusedTerminalId ? 'focused' : ''}`}
@@ -404,3 +431,18 @@ export const SplitLayout: React.FC<SplitLayoutProps> = ({
 
   return null;
 };
+
+// Memoize component to prevent re-renders when props haven't changed
+// This is critical for performance during resize operations
+export const SplitLayout = memo(SplitLayoutComponent, (prevProps, nextProps) => {
+  // Only re-render if these specific props change
+  return (
+    prevProps.terminal.id === nextProps.terminal.id &&
+    prevProps.terminal.splitLayout?.type === nextProps.terminal.splitLayout?.type &&
+    prevProps.activeTerminalId === nextProps.activeTerminalId &&
+    prevProps.terminals.length === nextProps.terminals.length &&
+    prevProps.agents.length === nextProps.agents.length &&
+    // Check if the relevant pane terminals have changed
+    JSON.stringify(prevProps.terminal.splitLayout?.panes) === JSON.stringify(nextProps.terminal.splitLayout?.panes)
+  );
+});
