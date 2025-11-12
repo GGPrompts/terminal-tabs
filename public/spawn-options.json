@@ -12,7 +12,7 @@
     {
       "label": "TFE",
       "command": "tfe",
-      "terminalType": "bash",
+      "terminalType": "tui-tool",
       "workingDir": "~/projects",
       "icon": "📁",
       "description": "Terminal File Explorer",
@@ -46,7 +46,7 @@
     {
       "label": "TUI Classic Games",
       "command": "./classics",
-      "terminalType": "bash",
+      "terminalType": "tui-tool",
       "icon": "🎮",
       "description": "",
       "workingDir": "~/projects/TUIClassics/bin",
@@ -99,11 +99,14 @@
     {
       "label": "Micro Editor",
       "command": "micro",
-      "terminalType": "bash",
+      "terminalType": "tui-tool",
       "icon": "📝",
       "description": "Modern terminal text editor",
       "defaultTheme": "solarized-dark",
-      "defaultTransparency": 85
+      "defaultTransparency": 85,
+      "defaultFontSize": 16,
+      "defaultFontFamily": "monospace",
+      "defaultBackground": "dark-neutral"
     },
     {
       "label": "Vim",
@@ -135,12 +138,15 @@
     {
       "label": "LazyGit",
       "command": "lazygit",
-      "terminalType": "bash",
+      "terminalType": "tui-tool",
       "workingDir": "~/projects",
       "icon": "🌿",
       "description": "Terminal UI for git",
       "defaultTheme": "github-dark",
-      "defaultTransparency": 95
+      "defaultTransparency": 95,
+      "defaultFontSize": 16,
+      "defaultFontFamily": "monospace",
+      "defaultBackground": "dark-neutral"
     },
     {
       "label": "AIChat",
@@ -164,20 +170,26 @@
     {
       "label": "Htop",
       "command": "htop",
-      "terminalType": "bash",
+      "terminalType": "tui-tool",
       "icon": "📊",
       "description": "Interactive process viewer",
       "defaultTheme": "matrix",
-      "defaultTransparency": 95
+      "defaultTransparency": 95,
+      "defaultFontSize": 16,
+      "defaultFontFamily": "monospace",
+      "defaultBackground": "dark-neutral"
     },
     {
       "label": "Bottom",
       "command": "bottom",
-      "terminalType": "bash",
+      "terminalType": "tui-tool",
       "icon": "📈",
       "description": "System monitor (bottom)",
       "defaultTheme": "dracula",
-      "defaultTransparency": 95
+      "defaultTransparency": 95,
+      "defaultFontSize": 16,
+      "defaultFontFamily": "monospace",
+      "defaultBackground": "dark-neutral"
     }
   ]
 }

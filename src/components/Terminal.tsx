@@ -67,6 +67,7 @@ export const Terminal = React.forwardRef<any, TerminalProps>(
     const fitAddonRef = useRef<FitAddon | null>(null);
     const [isMaximized, setIsMaximized] = useState(false);
     const [showThemePicker, setShowThemePicker] = useState(false);
+
     // Check if this is PyRadio - it needs special theme handling
     const isPyRadio = agent.name?.toLowerCase().includes('pyradio') || (agent as any).toolName === 'pyradio';
     // Get global default theme if not provided
@@ -89,7 +90,7 @@ export const Terminal = React.forwardRef<any, TerminalProps>(
     const prevDimensionsRef = useRef({ cols: 0, rows: 0 });
 
     // Check if this is a TUI tool that needs special handling
-    const isTUITool = agent.terminalType === 'tui-tool' ||
+    const isTUITool: boolean = agent.terminalType === 'tui-tool' ||
                       agent.name?.toLowerCase().includes('pyradio') ||
                       agent.name?.toLowerCase().includes('lazygit') ||
                       agent.name?.toLowerCase().includes('bottom') ||

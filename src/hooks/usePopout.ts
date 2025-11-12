@@ -36,6 +36,9 @@ export function usePopout(
   /**
    * Move tab to new window (or existing window if specified)
    *
+   * For split containers: Opens a SEPARATE window for each pane (simplified approach)
+   * For single terminals: Moves to one new window
+   *
    * @param terminalId - ID of terminal to pop out
    * @param targetWindowId - Optional target window ID (generates new if not provided)
    */
@@ -43,43 +46,216 @@ export function usePopout(
     const terminal = storedTerminals.find(t => t.id === terminalId)
     if (!terminal) return
 
-    // Generate new window ID if not specified
+    // Check if this terminal is PART OF a split (not just IS a split container)
+    const splitContainer = storedTerminals.find(t =>
+      t.splitLayout?.panes?.some(p => p.terminalId === terminalId)
+    )
+
+    // If this is a pane within a split, pop out just this pane
+    if (splitContainer && splitContainer.splitLayout) {
+      console.log(`[usePopout] Popping out pane ${terminal.name} from split ${splitContainer.id}`)
+
+      const paneWindowId = generateWindowId()
+
+      // Update pane to new window and clear split-related state
+      updateTerminal(terminalId, {
+        agentId: undefined,
+        status: 'spawning',
+        windowId: paneWindowId,
+        isHidden: false,  // Clear split pane hidden state
+        splitLayout: { type: 'single', panes: [] },  // Clear any split layout
+      })
+
+      // Remove this pane from the split container
+      const remainingPanes = splitContainer.splitLayout.panes.filter(p => p.terminalId !== terminalId)
+
+      if (remainingPanes.length === 1) {
+        // Only 1 pane left - convert split back to single terminal
+        console.log(`[usePopout] Only 1 pane remaining after popout, converting to single`)
+        updateTerminal(splitContainer.id, {
+          splitLayout: { type: 'single', panes: [] }
+        })
+
+        // Unhide the remaining pane
+        const remainingPaneTerminal = storedTerminals.find(t => t.id === remainingPanes[0].terminalId)
+        if (remainingPaneTerminal?.isHidden) {
+          updateTerminal(remainingPanes[0].terminalId, {
+            isHidden: false
+          })
+        }
+      } else {
+        // Still have multiple panes - update the split
+        updateTerminal(splitContainer.id, {
+          splitLayout: {
+            ...splitContainer.splitLayout,
+            panes: remainingPanes
+          }
+        })
+      }
+
+      // Switch to remaining terminal/split if needed
+      if (activeTerminalId === splitContainer.id && remainingPanes.length === 1) {
+        setActiveTerminal(remainingPanes[0].terminalId)
+      }
+
+      // Detach from tmux session
+      if (terminal.sessionName && useTmux) {
+        console.log(`[usePopout] Detaching from tmux session via API`)
+        try {
+          const response = await fetch(`/api/tmux/detach/${terminal.sessionName}`, {
+            method: 'POST',
+          })
+          const result = await response.json()
+          if (result.success) {
+            console.log(`[usePopout] ✓ Detached from tmux session: ${terminal.sessionName}`)
+          }
+        } catch (error) {
+          console.error(`[usePopout] Error detaching:`, error)
+        }
+      }
+
+      // Wait for localStorage sync, then open new window
+      setTimeout(() => {
+        console.log(`[usePopout] Opening new window for ${terminal.name}`)
+        const url = `${window.location.origin}${window.location.pathname}?window=${paneWindowId}&active=${terminalId}`
+        const newWin = window.open(url, `tabz-${paneWindowId}`, 'width=800,height=600')
+
+        if (!newWin) {
+          console.error('[usePopout] Failed to open window (popup blocked?)')
+          alert('Failed to open popup window. Please allow popups and try again.')
+        }
+      }, 600)
+
+      return
+    }
+
+    // Check if this is a split container (not a pane)
+    const isSplitContainer = terminal.splitLayout && terminal.splitLayout.type !== 'single'
+
+    if (isSplitContainer && terminal.splitLayout!.panes.length > 0) {
+      console.log(`[usePopout] Popping out split container - opening separate window for each of ${terminal.splitLayout!.panes.length} panes`)
+
+      // Collect all pane terminals
+      const paneTerminals = terminal.splitLayout!.panes
+        .map(pane => storedTerminals.find(t => t.id === pane.terminalId))
+        .filter(t => t && t.sessionName) as StoredTerminal[]
+
+      if (paneTerminals.length === 0) {
+        console.warn('[usePopout] No valid panes found in split')
+        return
+      }
+
+      // Step 1: For each pane, move to a NEW window (separate window IDs)
+      const paneUpdates: Array<{ terminalId: string; newWindowId: string; sessionName: string }> = []
+
+      for (const paneTerminal of paneTerminals) {
+        const paneWindowId = generateWindowId()
+        paneUpdates.push({
+          terminalId: paneTerminal.id,
+          newWindowId: paneWindowId,
+          sessionName: paneTerminal.sessionName!
+        })
+
+        // CRITICAL: Update pane to new window and clear split-related state
+        // Must clear isHidden and splitLayout so it becomes a normal tab in new window
+        updateTerminal(paneTerminal.id, {
+          agentId: undefined,
+          status: 'spawning',
+          windowId: paneWindowId,
+          isHidden: false,  // Clear split pane hidden state
+          splitLayout: { type: 'single', panes: [] },  // Clear any split layout
+        })
+
+        console.log(`[usePopout] Pane ${paneTerminal.name} → window ${paneWindowId}`)
+      }
+
+      // Step 2: Remove the split container from current window
+      // (Individual panes are now independent terminals in their own windows)
+      useSimpleTerminalStore.getState().removeTerminal(terminalId)
+
+      // Step 3: Switch to next available tab in current window
+      if (activeTerminalId === terminalId) {
+        const remainingTerminals = visibleTerminals.filter(t =>
+          t.id !== terminalId &&
+          !paneUpdates.find(p => p.terminalId === t.id) &&
+          (t.windowId || 'main') === currentWindowId
+        )
+        if (remainingTerminals.length > 0) {
+          setActiveTerminal(remainingTerminals[0].id)
+          console.log(`[usePopout] Switched to ${remainingTerminals[0].name}`)
+        } else {
+          setActiveTerminal(null)
+          console.log(`[usePopout] No remaining terminals`)
+        }
+      }
+
+      // Step 4: Detach from tmux sessions
+      if (useTmux) {
+        console.log(`[usePopout] Detaching from ${paneUpdates.length} tmux sessions via API`)
+        await Promise.all(
+          paneUpdates.map(async ({ sessionName }) => {
+            try {
+              const response = await fetch(`/api/tmux/detach/${sessionName}`, {
+                method: 'POST',
+              })
+              const result = await response.json()
+              if (result.success) {
+                console.log(`[usePopout] ✓ Detached from tmux session: ${sessionName}`)
+              } else {
+                console.warn(`[usePopout] Failed to detach from ${sessionName}:`, result.error)
+              }
+            } catch (error) {
+              console.error(`[usePopout] Error detaching from ${sessionName}:`, error)
+            }
+          })
+        )
+      }
+
+      // Step 5: Wait for localStorage sync, then open SEPARATE windows for each pane
+      setTimeout(() => {
+        console.log(`[usePopout] Opening ${paneUpdates.length} separate windows`)
+        let successCount = 0
+
+        for (const { terminalId: paneId, newWindowId, sessionName } of paneUpdates) {
+          const url = `${window.location.origin}${window.location.pathname}?window=${newWindowId}&active=${paneId}`
+          const newWin = window.open(url, `tabz-${newWindowId}`, 'width=800,height=600')
+
+          if (newWin) {
+            successCount++
+            console.log(`[usePopout] ✓ Opened window for ${sessionName}`)
+          } else {
+            console.error(`[usePopout] Failed to open window for ${sessionName} (popup blocked?)`)
+          }
+        }
+
+        if (successCount === 0) {
+          alert('Failed to open popup windows. Please allow popups and try again.')
+        } else if (successCount < paneUpdates.length) {
+          alert(`Only ${successCount} of ${paneUpdates.length} windows opened. Please allow popups.`)
+        }
+      }, 600)
+
+      return
+    }
+
+    // Single terminal (not a split) - original logic
     const newWindowId = targetWindowId || generateWindowId()
 
     console.log(`[usePopout] Popping out ${terminal.name} to window: ${newWindowId}`)
 
-    // Collect all session names to detach (terminal + split panes)
+    // Collect all session names to detach (terminal + split panes if any exist)
     const sessionsToDetach: string[] = []
     if (terminal.sessionName) {
       sessionsToDetach.push(terminal.sessionName)
     }
-    if (terminal.splitLayout && terminal.splitLayout.panes.length > 0) {
-      terminal.splitLayout.panes.forEach(pane => {
-        const paneTerminal = storedTerminals.find(t => t.id === pane.terminalId)
-        if (paneTerminal?.sessionName) {
-          sessionsToDetach.push(paneTerminal.sessionName)
-        }
-      })
-    }
 
     // Step 1: Update state - move to new window and clear agent IDs
-    console.log(`[usePopout] Step 1: Updating state (windowId=${newWindowId}, detaching ${sessionsToDetach.length} sessions)`)
+    console.log(`[usePopout] Step 1: Updating state (windowId=${newWindowId})`)
     updateTerminal(terminalId, {
       agentId: undefined,
       status: 'spawning',
       windowId: newWindowId,
     })
-
-    // Update split panes
-    if (terminal.splitLayout && terminal.splitLayout.panes.length > 0) {
-      terminal.splitLayout.panes.forEach(pane => {
-        updateTerminal(pane.terminalId, {
-          agentId: undefined,
-          status: 'spawning',
-          windowId: newWindowId,
-        })
-      })
-    }
 
     // Step 2: Switch away from this terminal in current window
     if (activeTerminalId === terminalId) {
