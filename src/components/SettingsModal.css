@@ -40,6 +40,36 @@
   color: #fff;
 }
 
+.settings-tabs {
+  display: flex;
+  gap: 0;
+  padding: 0 24px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(0, 0, 0, 0.2);
+}
+
+.settings-tab {
+  background: transparent;
+  border: none;
+  color: rgba(255, 255, 255, 0.6);
+  padding: 12px 20px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  border-bottom: 2px solid transparent;
+  transition: all 0.2s ease;
+}
+
+.settings-tab:hover {
+  color: rgba(255, 255, 255, 0.9);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.settings-tab.active {
+  color: #3b82f6;
+  border-bottom-color: #3b82f6;
+}
+
 .close-btn {
   background: rgba(255, 255, 255, 0.1);
   border: 1px solid rgba(255, 255, 255, 0.15);
@@ -474,4 +504,98 @@
   background: rgba(100, 200, 255, 0.25);
   border-color: rgba(100, 200, 255, 0.5);
   box-shadow: 0 0 8px rgba(100, 200, 255, 0.3);
+}
+
+/* Global Defaults Panel */
+.global-defaults-panel {
+  padding: 24px;
+}
+
+.settings-section {
+  margin-bottom: 24px;
+  padding: 16px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+}
+
+.settings-section h3 {
+  margin: 0 0 8px 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: #fff;
+}
+
+.setting-description {
+  margin: 0 0 12px 0;
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.settings-section input[type="text"],
+.settings-section input[type="number"] {
+  width: 100%;
+  padding: 8px 12px;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 6px;
+  color: #fff;
+  font-size: 14px;
+}
+
+.settings-section input[type="text"]:focus,
+.settings-section input[type="number"]:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+}
+
+.checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.checkbox-label input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+}
+
+.priority-info {
+  margin-top: 32px;
+  padding: 16px;
+  background: rgba(59, 130, 246, 0.1);
+  border: 1px solid rgba(59, 130, 246, 0.3);
+  border-radius: 8px;
+}
+
+.priority-info h4 {
+  margin: 0 0 12px 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: #3b82f6;
+}
+
+.priority-info p {
+  margin: 0 0 8px 0;
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.priority-info ol {
+  margin: 0;
+  padding-left: 24px;
+}
+
+.priority-info li {
+  margin-bottom: 6px;
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.priority-info strong {
+  color: #fff;
 }

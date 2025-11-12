@@ -102,7 +102,10 @@ export function useDragDrop(
               xPercent > 1 - edgeThreshold
 
             if (isEdgeZone) {
-              // In edge zone trying to split - don't update zone
+              // In edge zone trying to split - disable drop zone completely
+              if (zone !== null) {
+                setDropZoneState({ terminalId: dropZoneState.terminalId, zone: null })
+              }
               return
             }
           }
@@ -200,9 +203,8 @@ export function useDragDrop(
           xPercent > 1 - edgeThreshold
 
         if (isEdgeZone) {
-          // In edge zone - don't allow (block split into/from split panes)
-          // Force to center-left (default reorder position)
-          setDropZoneState({ terminalId: over.id as string, zone: 'left' })
+          // In edge zone trying to split - completely disable drop zone
+          setDropZoneState({ terminalId: over.id as string, zone: null })
           return
         }
       }

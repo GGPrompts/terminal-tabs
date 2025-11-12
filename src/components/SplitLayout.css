@@ -32,6 +32,23 @@
   isolation: isolate; /* Create stacking context to prevent z-index issues */
 }
 
+/* Add spacing between panes to prevent overlap and create visual gap */
+.split-pane-left {
+  padding-right: 4px;
+}
+
+.split-pane-right {
+  padding-left: 4px;
+}
+
+.split-pane-top {
+  padding-bottom: 4px;
+}
+
+.split-pane-bottom {
+  padding-top: 4px;
+}
+
 /* Resizable Box Overrides */
 .split-pane .react-resizable {
   position: relative;
@@ -43,7 +60,7 @@
   background: transparent !important;
 }
 
-/* Resize Handle Styling */
+/* Resize Handle Styling - More visible divider */
 .react-resizable-handle {
   position: absolute;
   z-index: 50; /* Increased to be above focus indicators */
@@ -53,12 +70,12 @@
 
 /* East handle (right edge) - for vertical splits */
 .react-resizable-handle-e {
-  right: -3px;
+  right: -4px;
   top: 0;
   bottom: 0;
-  width: 6px;
+  width: 8px;
   cursor: col-resize;
-  background: rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.15);
 }
 
 .react-resizable-handle-e:hover {
@@ -75,10 +92,10 @@
 .react-resizable-handle-s {
   left: 0;
   right: 0;
-  bottom: -3px;
-  height: 6px;
+  bottom: -4px;
+  height: 8px;
   cursor: row-resize;
-  background: rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.15);
 }
 
 .react-resizable-handle-s:hover {
@@ -91,11 +108,11 @@
   box-shadow: 0 0 12px rgba(59, 130, 246, 0.6);
 }
 
-/* Visual Divider Line */
+/* Visual Divider Line - More prominent */
 .react-resizable-handle::before {
   content: '';
   position: absolute;
-  background: rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.3);
   transition: background 0.15s ease;
 }
 
@@ -103,7 +120,7 @@
   left: 50%;
   top: 0;
   bottom: 0;
-  width: 1px;
+  width: 2px;
   transform: translateX(-50%);
 }
 
@@ -111,12 +128,12 @@
   left: 0;
   right: 0;
   top: 50%;
-  height: 1px;
+  height: 2px;
   transform: translateY(-50%);
 }
 
 .react-resizable-handle:hover::before {
-  background: rgba(59, 130, 246, 0.8);
+  background: rgba(59, 130, 246, 0.9);
 }
 
 .react-resizable-handle:active::before {
@@ -142,9 +159,18 @@ body.react-resizable-resizing.react-resizable-resizing-s {
   cursor: row-resize !important;
 }
 
-/* Smooth transitions when not dragging */
-.split-pane:not(.react-resizable-resizing) {
-  transition: width 0.1s ease, height 0.1s ease;
+/* Disable transitions during drag for maximum performance */
+.split-pane {
+  transition: none;
+}
+
+/* Enable GPU acceleration for smoother rendering */
+.split-pane,
+.split-layout-container,
+.react-resizable-handle {
+  will-change: auto;
+  transform: translateZ(0);
+  backface-visibility: hidden;
 }
 
 /* Prevent any pseudo-elements from react-resizable that might darken */

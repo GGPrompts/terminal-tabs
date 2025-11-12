@@ -174,13 +174,18 @@ wss.on('connection', (ws) => {
             if (!terminalOwners.has(result.terminal.id)) {
               terminalOwners.set(result.terminal.id, new Set());
             }
-            terminalOwners.get(result.terminal.id).add(ws);
+            const ownersSet = terminalOwners.get(result.terminal.id);
+            const wasAlreadyOwned = ownersSet.has(ws);
+            ownersSet.add(ws);
 
             log.success('Spawned terminal', {
               id: result.terminal.id,
               name: result.terminal.name,
               type: result.terminal.terminalType,
-              platform: result.terminal.platform
+              platform: result.terminal.platform,
+              sessionName: result.terminal.sessionName,
+              owners: ownersSet.size,
+              alreadyOwned: wasAlreadyOwned
             });
             // Include requestId if provided
             broadcast({
@@ -421,24 +426,43 @@ terminalRegistry.on('output', (terminalId, data) => {
   // This prevents cross-window contamination and escape sequence corruption
   const owners = terminalOwners.get(terminalId);
   if (owners && owners.size > 0) {
+    // Debug: Log if multiple owners exist (shouldn't happen!)
+    if (owners.size > 1) {
+      log.warn(`⚠️ Terminal ${terminalId.slice(-8)} has ${owners.size} owners! This may cause escape sequence leaks.`);
+    }
+
     const message = JSON.stringify({
       type: 'terminal-output',
       terminalId,
       data
     });
 
+    // Clean up dead connections while sending (prevents escape sequence leaks)
+    const deadConnections = [];
     owners.forEach(client => {
       if (client.readyState === WebSocket.OPEN) {
         try {
           client.send(message);
         } catch (error) {
           log.error('Error sending terminal output to client:', error);
-          // Remove dead connection from owners
-          owners.delete(client);
-          activeConnections.delete(client);
+          deadConnections.push(client);
         }
+      } else {
+        // Connection is not OPEN (CONNECTING, CLOSING, or CLOSED) - mark for removal
+        deadConnections.push(client);
       }
     });
+
+    // Remove dead connections from owners map
+    deadConnections.forEach(client => {
+      owners.delete(client);
+      activeConnections.delete(client);
+    });
+
+    // Clean up empty owner sets
+    if (owners.size === 0) {
+      terminalOwners.delete(terminalId);
+    }
   }
 });
 
@@ -457,7 +481,7 @@ setInterval(() => {
       deadConnections.push(ws);
     }
   });
-  
+
   deadConnections.forEach(ws => {
     log.debug('Removing dead WebSocket connection');
     activeConnections.delete(ws);
@@ -467,7 +491,29 @@ setInterval(() => {
       // Ignore errors
     }
   });
-  
+
+  // Clean up dead connections from terminalOwners map (prevents escape sequence leaks)
+  let cleanedCount = 0;
+  terminalOwners.forEach((owners, terminalId) => {
+    const deadOwners = [];
+    owners.forEach(client => {
+      if (client.readyState !== WebSocket.OPEN) {
+        deadOwners.push(client);
+      }
+    });
+    deadOwners.forEach(client => {
+      owners.delete(client);
+      cleanedCount++;
+    });
+    // Clean up empty owner sets
+    if (owners.size === 0) {
+      terminalOwners.delete(terminalId);
+    }
+  });
+  if (cleanedCount > 0) {
+    log.debug(`Cleaned up ${cleanedCount} dead connections from terminalOwners map`);
+  }
+
   // Log memory usage for monitoring
   const memUsage = process.memoryUsage();
   const heapUsed = Math.round(memUsage.heapUsed / 1024 / 1024);

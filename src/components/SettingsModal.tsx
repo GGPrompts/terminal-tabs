@@ -4,6 +4,7 @@ import { backgroundGradients } from '../styles/terminal-backgrounds'
 import { FontFamilyDropdown } from './FontFamilyDropdown'
 import { BackgroundGradientDropdown } from './BackgroundGradientDropdown'
 import { TextColorThemeDropdown } from './TextColorThemeDropdown'
+import { useSettingsStore } from '../stores/useSettingsStore'
 
 interface SpawnOption {
   label: string
@@ -42,6 +43,7 @@ const ICON_OPTIONS = [
 ]
 
 export function SettingsModal({ isOpen, onClose, onSave }: SettingsModalProps) {
+  const [activeTab, setActiveTab] = useState<'spawn-options' | 'global-defaults'>('spawn-options')
   const [spawnOptions, setSpawnOptions] = useState<SpawnOption[]>([])
   const [originalOptions, setOriginalOptions] = useState<SpawnOption[]>([]) // Track original state
   const [isLoading, setIsLoading] = useState(true)
@@ -52,6 +54,9 @@ export function SettingsModal({ isOpen, onClose, onSave }: SettingsModalProps) {
   const [showIconPicker, setShowIconPicker] = useState(false)
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null)
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null)
+
+  // Global settings
+  const settings = useSettingsStore()
   const [formData, setFormData] = useState<SpawnOption>({
     label: '',
     command: '',
@@ -274,14 +279,88 @@ export function SettingsModal({ isOpen, onClose, onSave }: SettingsModalProps) {
     <div className="settings-modal-overlay" onClick={handleClose}>
       <div className="settings-modal" onClick={(e) => e.stopPropagation()}>
         <div className="settings-header">
-          <h2>⚙️ Spawn Options Manager</h2>
+          <h2>⚙️ Settings</h2>
           <button className="close-btn" onClick={handleClose}>✕</button>
+        </div>
+
+        <div className="settings-tabs">
+          <button
+            className={`settings-tab ${activeTab === 'spawn-options' ? 'active' : ''}`}
+            onClick={() => setActiveTab('spawn-options')}
+          >
+            Spawn Options
+          </button>
+          <button
+            className={`settings-tab ${activeTab === 'global-defaults' ? 'active' : ''}`}
+            onClick={() => setActiveTab('global-defaults')}
+          >
+            Global Defaults
+          </button>
         </div>
 
         {error && <div className="error-message">{error}</div>}
 
         <div className="settings-body">
-          {isLoading ? (
+          {activeTab === 'global-defaults' ? (
+            <div className="global-defaults-panel">
+              <div className="settings-section">
+                <h3>📁 Default Working Directory</h3>
+                <p className="setting-description">Used when spawn options don't specify a directory</p>
+                <input
+                  type="text"
+                  value={settings.workingDirectory}
+                  onChange={(e) => settings.setWorkingDirectory(e.target.value)}
+                  placeholder="/home/matt"
+                />
+              </div>
+
+              <div className="settings-section">
+                <h3>🔤 Default Font Family</h3>
+                <p className="setting-description">Used when spawn options don't specify a font</p>
+                <input
+                  type="text"
+                  value={settings.terminalDefaultFontFamily}
+                  onChange={(e) => settings.setTerminalDefaultFontFamily(e.target.value)}
+                  placeholder="monospace"
+                />
+              </div>
+
+              <div className="settings-section">
+                <h3>📏 Default Font Size</h3>
+                <p className="setting-description">Used when spawn options don't specify a size</p>
+                <input
+                  type="number"
+                  min="8"
+                  max="48"
+                  value={settings.terminalDefaultFontSize}
+                  onChange={(e) => settings.setTerminalDefaultFontSize(Number(e.target.value))}
+                />
+              </div>
+
+              <div className="settings-section">
+                <h3>📜 Use Tmux</h3>
+                <p className="setting-description">Enable tmux for session persistence</p>
+                <label className="checkbox-label">
+                  <input
+                    type="checkbox"
+                    checked={settings.useTmux}
+                    onChange={(e) => settings.setUseTmux(e.target.checked)}
+                  />
+                  Enable tmux by default
+                </label>
+              </div>
+
+              <div className="priority-info">
+                <h4>⚡ Priority System</h4>
+                <p>Settings are applied in this order:</p>
+                <ol>
+                  <li><strong>Per-terminal overrides</strong> (footer controls) - highest priority</li>
+                  <li><strong>Spawn option defaults</strong> (Spawn Options tab)</li>
+                  <li><strong>Global defaults</strong> (this tab) - lowest priority</li>
+                </ol>
+              </div>
+            </div>
+          ) : isLoading ? (
             <div className="loading">Loading...</div>
           ) : !isAdding ? (
             <>

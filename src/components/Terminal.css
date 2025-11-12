@@ -102,8 +102,8 @@
   overflow: hidden;
   /* Semi-transparent background to ensure clicks register while keeping glassmorphism */
   background: rgba(0, 0, 0, 0.1);
-  /* Make inner xterm fill exact container width for precise fit */
-  padding: 0;
+  /* Comfortable padding to prevent text from touching borders */
+  padding: 4px 8px 4px 12px;
   box-sizing: border-box;
   position: relative;
   z-index: 1;
@@ -113,8 +113,7 @@
   height: 100%;
   width: 100% !important;
   background: transparent !important;
-  /* Do not add padding here to avoid visual seams; fit relies on exact width */
-  padding: 0 !important;
+  /* Padding is now on .terminal-body container for proper spacing */
   margin: 0 !important;
 }
 

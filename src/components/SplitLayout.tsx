@@ -39,7 +39,6 @@ const SplitLayoutComponent: React.FC<SplitLayoutProps> = ({
 
   // Debounce terminal refit events to prevent excessive re-renders during drag
   const refitTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const lastRefitTimeRef = useRef<number>(0);
 
   const triggerTerminalRefit = () => {
     if (refitTimeoutRef.current) {
@@ -47,23 +46,7 @@ const SplitLayoutComponent: React.FC<SplitLayoutProps> = ({
     }
     refitTimeoutRef.current = setTimeout(() => {
       window.dispatchEvent(new Event('terminal-container-resized'));
-      lastRefitTimeRef.current = Date.now();
-    }, 150); // Wait 150ms after last resize before refitting
-  };
-
-  // Throttled version for live resize events (max 10 times per second)
-  const triggerTerminalRefitThrottled = () => {
-    const now = Date.now();
-    const timeSinceLastRefit = now - lastRefitTimeRef.current;
-
-    // Only trigger if it's been at least 100ms since last refit
-    if (timeSinceLastRefit >= 100) {
-      window.dispatchEvent(new Event('terminal-container-resized'));
-      lastRefitTimeRef.current = now;
-    } else {
-      // Otherwise schedule a debounced refit
-      triggerTerminalRefit();
-    }
+    }, 100); // Wait 100ms after last resize before refitting
   };
 
   // Handle closing a pane in a split
@@ -221,10 +204,6 @@ const SplitLayoutComponent: React.FC<SplitLayoutProps> = ({
           axis="x"
           minConstraints={[200, containerHeight]}
           maxConstraints={[containerWidth - 200, containerHeight]}
-          onResize={(e, data) => {
-            // Live update during drag with throttling (max 10 refits/sec)
-            triggerTerminalRefitThrottled();
-          }}
           onResizeStop={(e, data) => {
             const newSize = (data.size.width / containerWidth) * 100;
             updateTerminal(terminal.id, {
@@ -237,7 +216,7 @@ const SplitLayoutComponent: React.FC<SplitLayoutProps> = ({
               },
             });
 
-            // Final refit after resize completes
+            // Refit terminals after resize completes
             triggerTerminalRefit();
           }}
           resizeHandles={['e']}
@@ -360,10 +339,6 @@ const SplitLayoutComponent: React.FC<SplitLayoutProps> = ({
           axis="y"
           minConstraints={[containerWidth, 200]}
           maxConstraints={[containerWidth, containerHeight - 200]}
-          onResize={(e, data) => {
-            // Live update during drag with throttling (max 10 refits/sec)
-            triggerTerminalRefitThrottled();
-          }}
           onResizeStop={(e, data) => {
             const newSize = (data.size.height / containerHeight) * 100;
             updateTerminal(terminal.id, {
@@ -376,7 +351,7 @@ const SplitLayoutComponent: React.FC<SplitLayoutProps> = ({
               },
             });
 
-            // Final refit after resize completes
+            // Refit terminals after resize completes
             triggerTerminalRefit();
           }}
           resizeHandles={['s']}

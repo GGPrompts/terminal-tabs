@@ -86,6 +86,7 @@ backend/
 ✅ **Theme System** - 14 themes with aliases (amber, matrix, etc.)
 ✅ **Spawn Menu** - Right-click spawn with 15 options
 ✅ **Connection Status** - WebSocket connection indicator
+✅ **Settings Modal** - Edit spawn options and global defaults with visual priority system
 
 ---
 
@@ -774,7 +775,85 @@ tmux ls | grep "tt-bash"
 
 ---
 
-**Last Updated**: November 8, 2025
+## ✅ Recently Fixed (Nov 12, 2025) - UI/UX Improvements
+
+### Global Settings Visibility
+**Problem:** The app had a 3-tier configuration priority system (per-terminal overrides → spawn option defaults → global defaults) but no UI to view or edit global defaults. This caused confusion when terminals spawned in unexpected directories or with unexpected fonts.
+
+**Solution:** Added **Global Defaults** tab to Settings Modal (⚙️ button) with clear visibility into the priority system.
+
+**New Features:**
+```tsx
+// Settings Modal now has 2 tabs:
+// 1. Spawn Options (existing)
+// 2. Global Defaults (NEW)
+```
+
+**Global Defaults Tab includes:**
+- 📁 **Default Working Directory** - Fallback when spawn options don't specify
+- 🔤 **Default Font Family** - Fallback font
+- 📏 **Default Font Size** - Fallback size
+- 📜 **Use Tmux** - Enable/disable tmux by default
+- ⚡ **Priority System Explanation** - Visual diagram showing:
+  1. Per-terminal overrides (footer controls) - highest priority
+  2. Spawn option defaults (Spawn Options tab)
+  3. Global defaults (Global Defaults tab) - lowest priority
+
+**Files Modified:**
+- `src/components/SettingsModal.tsx` - Added Global Defaults tab and priority explanation
+- `src/components/SettingsModal.css` - Added tab styling and global defaults panel CSS
+- `public/spawn-options.json` - Added default `workingDir` to Bash and Claude Code options
+
+**Impact:**
+- ✅ Users can now see and edit all three configuration levels
+- ✅ Clear documentation of priority system in UI
+- ✅ No more confusion about where settings come from
+- ✅ Changes save immediately to Settings Store
+
+### Split Terminal Visual Improvements
+**Problem:** Split terminal dividers were hard to see, and terminals lacked left padding causing text to touch the edge.
+
+**Solution:**
+- Increased divider visibility: 1px → 2px, opacity 15% → 30%
+- Added 12px left padding to terminals
+- Added 8px gap between split panes to prevent overlap
+- Disabled drop zones on already-split tabs (prevents nested splits)
+
+**Files Modified:**
+- `src/components/Terminal.css` - Added left padding (line 106)
+- `src/components/SplitLayout.css` - Enhanced divider visibility and spacing
+- `src/hooks/useDragDrop.ts` - Disabled drop zones for split tabs
+
+### Backend Output Routing Improvements
+**Problem:** Stale WebSocket connections from closed popout windows remained in `terminalOwners` map, causing escape sequences to leak to wrong terminals.
+
+**Solution:** Added defensive cleanup for dead connections during output and periodic cleanup every 5 seconds.
+
+**Files Modified:**
+- `backend/server.js` - Enhanced `terminalOwners` cleanup (lines 419-457, 466-505)
+
+**Impact:**
+- ✅ No more escape sequence leaks (`1;2c0;276;0c`) in terminals
+- ✅ Clean connection management for multi-window setups
+- ✅ Debug logging for tracking ownership issues
+
+### Drag Performance Optimization
+**Problem:** Dragging split dividers felt laggy due to excessive terminal refits (10 per second).
+
+**Solution:** Eliminated live refits during drag - only refit once when drag completes.
+
+**Files Modified:**
+- `src/components/SplitLayout.tsx` - Removed `onResize` handlers, kept only `onResizeStop`
+- `src/components/SplitLayout.css` - Added GPU acceleration hints
+
+**Impact:**
+- ✅ Buttery smooth drag performance
+- ✅ Terminal content snaps to correct size on release
+- ✅ Reduced CPU usage during resize
+
+---
+
+**Last Updated**: November 12, 2025
 
 ---
 
