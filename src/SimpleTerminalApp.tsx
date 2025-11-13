@@ -295,6 +295,21 @@ function SimpleTerminalApp() {
     timestamp: number
     stack?: string
   }>>([])
+  const [showErrorModal, setShowErrorModal] = useState(false)
+
+  // Expected errors to ignore (non-critical)
+  const isExpectedError = (message: string): boolean => {
+    const expectedPatterns = [
+      /spawn not found/i,
+      /after detaching/i,
+      /terminal.*not found.*after detach/i,
+      /websocket.*already.*closed/i,
+      /connection.*already.*closed/i,
+      /terminal not found for agentId/i,  // Expected during reattach
+      /\[useWebSocketManager\].*not found/i,  // WebSocket manager warnings
+    ]
+    return expectedPatterns.some(pattern => pattern.test(message))
+  }
 
   // Context menu state
   const [contextMenu, setContextMenu] = useState<{
@@ -310,6 +325,12 @@ function SimpleTerminalApp() {
     terminalId: string | null
     currentName: string
   }>({ show: false, terminalId: null, currentName: '' })
+
+  // Detached terminals dropdown state
+  const [showDetachedDropdown, setShowDetachedDropdown] = useState(false)
+  const [detachedDropdownPosition, setDetachedDropdownPosition] = useState({ top: 0, left: 0 })
+  const detachedDropdownRef = useRef<HTMLDivElement>(null)
+  const detachedTabRef = useRef<HTMLDivElement>(null)
 
   // Settings
   const { useTmux, updateSettings } = useSettingsStore()
@@ -353,8 +374,9 @@ function SimpleTerminalApp() {
   // NEW: Split panes now show as tabs (styled to look merged)
   const visibleTerminals = useMemo(() => {
     const filtered = storedTerminals.filter(t => {
-      // Detached terminals show in ALL windows (can re-attach from any monitor)
-      if (t.status === 'detached') return true
+      // CHANGED: Don't show individual detached terminals as tabs
+      // They'll be consolidated into one "Detached Terminals" tab
+      if (t.status === 'detached') return false
 
       // Terminals without a windowId belong to the main window (backwards compatibility)
       const terminalWindow = t.windowId || 'main'
@@ -365,6 +387,11 @@ function SimpleTerminalApp() {
 
     return filtered
   }, [storedTerminals, currentWindowId])
+
+  // Get all detached terminals (show in ALL windows)
+  const detachedTerminals = useMemo(() => {
+    return storedTerminals.filter(t => t.status === 'detached')
+  }, [storedTerminals])
 
   // Detect split tab positions for merged styling
   const splitTabInfo = useMemo(() => {
@@ -439,6 +466,11 @@ function SimpleTerminalApp() {
         typeof arg === 'object' ? JSON.stringify(arg, null, 2) : String(arg)
       ).join(' ')
 
+      // Skip expected/non-critical errors
+      if (isExpectedError(message)) {
+        return
+      }
+
       const stack = new Error().stack
 
       setConsoleErrors(prev => {
@@ -455,6 +487,11 @@ function SimpleTerminalApp() {
       const message = '⚠️ ' + args.map(arg =>
         typeof arg === 'object' ? JSON.stringify(arg, null, 2) : String(arg)
       ).join(' ')
+
+      // Skip expected/non-critical warnings
+      if (isExpectedError(message)) {
+        return
+      }
 
       setConsoleErrors(prev => {
         const newErrors = [...prev, { message, timestamp: Date.now() }]
@@ -700,6 +737,22 @@ function SimpleTerminalApp() {
     }
   }, [contextMenu.show])
 
+  // Close detached dropdown on outside click
+  useEffect(() => {
+    if (!showDetachedDropdown) return
+
+    const handleClick = (e: MouseEvent) => {
+      if (detachedDropdownRef.current && !detachedDropdownRef.current.contains(e.target as Node)) {
+        setShowDetachedDropdown(false)
+      }
+    }
+
+    document.addEventListener('click', handleClick)
+    return () => {
+      document.removeEventListener('click', handleClick)
+    }
+  }, [showDetachedDropdown])
+
   // Handle right-click on tab
   const handleTabContextMenu = (e: React.MouseEvent, terminalId: string) => {
     e.preventDefault()
@@ -804,6 +857,7 @@ function SimpleTerminalApp() {
           updateTerminal(pane.terminalId, {
             status: 'detached',
             agentId: undefined,
+            windowId: undefined, // Clear window assignment
           })
         }
       }
@@ -812,6 +866,7 @@ function SimpleTerminalApp() {
       updateTerminal(contextMenu.terminalId, {
         status: 'detached',
         agentId: undefined,
+        windowId: undefined, // Clear window assignment
       })
 
       console.log(`[SimpleTerminalApp] ✓ Detached split container with preserved layout`)
@@ -892,10 +947,11 @@ function SimpleTerminalApp() {
           clearProcessedAgentId(terminal.agentId)
         }
 
-        // Mark terminal as detached (keeps in localStorage, shows as grayed tab)
+        // Mark terminal as detached (keeps in localStorage, globally accessible)
         updateTerminal(contextMenu.terminalId, {
           status: 'detached',
           agentId: undefined, // Clear PTY connection so it can reconnect
+          windowId: undefined, // Clear window assignment so it can reattach anywhere
         })
       } else {
         console.error(`[SimpleTerminalApp] Failed to detach:`, result.error)
@@ -1269,6 +1325,11 @@ ${localStorageKeys.map(k => `  • ${k}`).join('\n')}
     window.location.reload()
   }
 
+  const handleClearErrors = () => {
+    setConsoleErrors([])
+    setShowErrorModal(false)
+  }
+
   const handleCopyErrorsToClipboard = async () => {
     if (consoleErrors.length === 0) {
       alert('📋 No errors to copy')
@@ -1296,8 +1357,6 @@ End of error report
     try {
       await navigator.clipboard.writeText(errorReport)
       alert(`✅ Copied ${consoleErrors.length} error(s) to clipboard!`)
-      // Optionally clear errors after copy
-      // setConsoleErrors([])
     } catch (err) {
       console.error('Failed to copy to clipboard:', err)
       alert('❌ Failed to copy to clipboard')
@@ -1531,6 +1590,50 @@ End of error report
           </button>
         </div>
 
+        {/* Detached Terminals Dropdown (in header) */}
+        {detachedTerminals.length > 0 && (
+          <div className="detached-header-container" ref={detachedDropdownRef}>
+            <button
+              className="detached-header-button"
+              onClick={(e) => {
+                e.stopPropagation()
+                setShowDetachedDropdown(!showDetachedDropdown)
+              }}
+              title={`${detachedTerminals.length} detached terminal(s)`}
+            >
+              📌 Detached ({detachedTerminals.length})
+            </button>
+
+            {/* Dropdown Menu */}
+            {showDetachedDropdown && (
+              <div className="detached-dropdown">
+                <div className="detached-dropdown-header">
+                  Select terminal to reattach:
+                </div>
+                {detachedTerminals.map(terminal => (
+                  <div
+                    key={terminal.id}
+                    className="detached-dropdown-item"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      handleReattachTerminal(terminal.id)
+                      setShowDetachedDropdown(false)
+                    }}
+                  >
+                    <span className="detached-dropdown-icon">{terminal.icon || '💻'}</span>
+                    <span className="detached-dropdown-name">{terminal.name}</span>
+                    {terminal.sessionName && (
+                      <span className="detached-dropdown-session">
+                        {terminal.sessionName}
+                      </span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
         <div className="header-actions">
           <button
             className="clear-sessions-button"
@@ -1542,8 +1645,12 @@ End of error report
           {consoleErrors.length > 0 && (
             <button
               className="error-indicator-button"
-              onClick={handleCopyErrorsToClipboard}
-              title={`Copy ${consoleErrors.length} error(s) to clipboard`}
+              onClick={() => setShowErrorModal(true)}
+              onContextMenu={(e) => {
+                e.preventDefault()
+                handleCopyErrorsToClipboard()
+              }}
+              title={`${consoleErrors.length} error(s) - Click to view, right-click to copy`}
             >
               <span className="error-badge">{consoleErrors.length}</span>
               ❗
@@ -1682,6 +1789,7 @@ End of error report
                   />
                 )
               })}
+
               <button
                 className="tab-add"
                 onClick={() => setShowSpawnMenu(!showSpawnMenu)}
@@ -1698,6 +1806,54 @@ End of error report
         onClose={() => setShowSettings(false)}
         onSave={() => loadSpawnOptions()}
       />
+
+      {/* Error Modal */}
+      {showErrorModal && (
+        <div className="modal-overlay" onClick={() => setShowErrorModal(false)}>
+          <div className="modal-content error-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>Console Errors ({consoleErrors.length})</h2>
+              <button className="modal-close" onClick={() => setShowErrorModal(false)}>×</button>
+            </div>
+            <div className="modal-body">
+              {consoleErrors.length === 0 ? (
+                <p className="no-errors">No errors to display</p>
+              ) : (
+                <div className="error-list">
+                  {consoleErrors.map((err, idx) => (
+                    <div key={idx} className="error-item">
+                      <div className="error-header">
+                        <span className="error-number">#{idx + 1}</span>
+                        <span className="error-time">
+                          {new Date(err.timestamp).toLocaleTimeString()}
+                        </span>
+                      </div>
+                      <div className="error-message">{err.message}</div>
+                      {err.stack && (
+                        <details className="error-stack">
+                          <summary>Stack trace</summary>
+                          <pre>{err.stack}</pre>
+                        </details>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+            <div className="modal-footer">
+              <button className="button-secondary" onClick={handleCopyErrorsToClipboard}>
+                📋 Copy to Clipboard
+              </button>
+              <button className="button-danger" onClick={handleClearErrors}>
+                🗑️ Clear All Errors
+              </button>
+              <button className="button-primary" onClick={() => setShowErrorModal(false)}>
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Spawn Menu */}
       {showSpawnMenu && (

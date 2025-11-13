@@ -3,7 +3,7 @@
     "workingDirectory": "/home/matt/projects/terminal-tabs",
     "fontFamily": "'SauceCodePro Nerd Font', 'SauceCodePro NF', monospace",
     "fontSize": 16,
-    "theme": "green",
+    "theme": "holographic",
     "background": "carbon",
     "transparency": 90,
     "useTmux": true
@@ -177,13 +177,14 @@
     },
     {
       "label": "Dev Logs",
-      "command": "./scripts/dev-logs.sh",
+      "command": "tmux attach -t tabz:backend",
       "terminalType": "bash",
       "workingDir": "~/projects/terminal-tabs",
       "icon": "📊",
-      "description": "View beautiful colored logs from backend server",
+      "description": "Live backend logs with forwarded browser console output",
       "defaultTheme": "monokai",
-      "defaultTransparency": 95
+      "defaultTransparency": 95,
+      "useTmux": false
     },
     {
       "label": "Htop",
