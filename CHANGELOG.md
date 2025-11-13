@@ -7,6 +7,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.2.3] - 2025-11-13
+
+### ✅ Test Suite & Configuration Improvements
+
+#### Test Fixes (100% Passing)
+- **Fixed all 10 failing tests** - Achieved 214/214 tests passing (100% success rate)
+  - Fixed `usePopout.ts` test expectations for new `popoutMode` parameter (2 tests)
+  - Fixed Zustand persist timing issues in multi-window tests with `waitFor()` (8 tests)
+  - Modified: `tests/unit/hooks/usePopout.test.ts`, `tests/integration/multi-window-popout.test.ts`
+
+#### Working Directory Priority Fix
+- **Fixed working directory override priority** - Spawn options with explicit `workingDir` no longer overridden by global setting
+  - **Before (broken)**: Global override input overrode ALL spawn options, even those with explicit paths (Dev Logs with `/tmp` used home directory instead)
+  - **After (fixed)**: Priority order - spawn option's `workingDir` → spawn menu override → global default
+  - Prevents accidental overrides of intentionally-configured paths
+  - Modified: `src/hooks/useTerminalSpawning.ts`, added tests in `tests/unit/hooks/useTerminalSpawning.test.ts` and `tests/integration/terminal-spawning.test.ts`
+
+#### Project Dropdown Implementation
+- **Added project selector to Settings Modal** - Quick switching between configured projects
+  - New `projects` array in `public/spawn-options.json` (git-tracked configuration)
+  - Dropdown in Global Defaults tab with "Manual Entry" + configured projects
+  - Auto-fills working directory when project selected
+  - Selecting project → fills path, manually editing path → switches to "Manual Entry"
+  - Backend API preserves projects when saving settings
+  - Modified: `src/components/SettingsModal.tsx`, `backend/routes/api.js`, `public/spawn-options.json`
+
+### 🐛 Bug Fixes
+- Fixed Bash spawn option using `~` instead of global default working directory
+- Fixed Settings Modal validation rejecting empty command strings (now allows `""` for plain bash)
+- Modified: `public/spawn-options.json`, `src/components/SettingsModal.tsx`
+
+### 📝 Documentation
+- Updated NEXT_SESSION_PROMPT.md with session summary and next steps
+
+---
+
 ## [1.2.2] - 2025-11-12
 
 ### ✨ Enhanced Tab Naming & Hook Status Fixes

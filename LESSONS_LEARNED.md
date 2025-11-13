@@ -402,4 +402,450 @@ export function useWebSocketManager(
 
 ---
 
+## React Performance Optimization
+
+### Lesson: React.memo + Smart Comparison Prevents Re-render Spam (Nov 12, 2025)
+
+**Problem:** Split terminals were choppy during resize - component rendering hundreds of times per second.
+
+**Root Cause:**
+1. Parent creating new arrays on every render via `.filter()`
+2. No memoization on SplitLayout component
+3. Props changing reference on every parent render
+
+**Solution:**
+```typescript
+// 1. Memoize computed arrays in parent
+const visibleTerminals = useMemo(() =>
+  storedTerminals.filter(t => t.windowId === currentWindowId),
+  [storedTerminals, currentWindowId]
+)
+
+// 2. Wrap component with React.memo + custom comparison
+export const SplitLayout = memo(SplitLayoutComponent, (prevProps, nextProps) => {
+  return (
+    prevProps.terminal.id === nextProps.terminal.id &&
+    prevProps.terminal.splitLayout?.type === nextProps.terminal.splitLayout?.type &&
+    prevProps.activeTerminalId === nextProps.activeTerminalId &&
+    prevProps.terminals.length === nextProps.terminals.length &&
+    JSON.stringify(prevProps.terminal.splitLayout?.panes) ===
+      JSON.stringify(nextProps.terminal.splitLayout?.panes)
+  )
+})
+```
+
+**Impact:** Reduced renders from ~200/second to ~20/second (90% reduction!)
+
+**Key Insight:**
+- Always pass memoized arrays/objects as props, not inline computations
+- Use React.memo with custom comparison for components with complex props
+- Check parent render behavior, not just component itself
+
+**Files:**
+- `src/components/SplitLayout.tsx` - React.memo implementation
+- `src/SimpleTerminalApp.tsx` - useMemo for visibleTerminals
+
+**Reference:** `docs/SPLIT_PERFORMANCE_FIXES_v2.md`
+
+---
+
+### Lesson: Throttle High-Frequency Events, Debounce Final Actions (Nov 12, 2025)
+
+**Problem:** Terminal refit happening hundreds of times per second during drag.
+
+**Root Cause:** `onResize` fires on every mousemove during drag (no rate limiting).
+
+**Solution:**
+```typescript
+// Throttle: Allow max 10 refits/second during drag
+const triggerTerminalRefitThrottled = () => {
+  const now = Date.now()
+  const timeSinceLastRefit = now - lastRefitTimeRef.current
+
+  if (timeSinceLastRefit >= 100) {  // 100ms = 10/sec
+    window.dispatchEvent(new Event('terminal-container-resized'))
+    lastRefitTimeRef.current = now
+  }
+}
+
+// Debounce: Wait 150ms after last resize before final refit
+const triggerTerminalRefit = () => {
+  if (refitTimeoutRef.current) clearTimeout(refitTimeoutRef.current)
+  refitTimeoutRef.current = setTimeout(() => {
+    window.dispatchEvent(new Event('terminal-container-resized'))
+  }, 150)
+}
+
+// Use both:
+<ResizableBox
+  onResize={() => triggerTerminalRefitThrottled()}  // During drag
+  onResizeStop={() => triggerTerminalRefit()}       // After drag
+/>
+```
+
+**When to Use Each:**
+- **Throttle:** High-frequency events where you want live feedback (resize, scroll, mousemove)
+- **Debounce:** Actions that should only run after user stops (search, save, final refit)
+
+**Key Insight:**
+- Throttle = "do this at most X times per second"
+- Debounce = "do this after user stops for X ms"
+- Combine both for smooth UX: throttled live feedback + debounced final action
+
+**Files:**
+- `src/components/SplitLayout.tsx:100-119` - Throttle + debounce implementation
+
+**Reference:** `docs/SPLIT_PERFORMANCE_FIXES_v2.md`, `docs/SPLIT_TERMINAL_FIXES.md`
+
+---
+
+### Lesson: Remove Debug Logging Before Committing (Nov 12, 2025)
+
+**Problem:** Console spam making debugging impossible, performance impact.
+
+**What to Remove:**
+```typescript
+// ❌ REMOVE BEFORE COMMIT
+console.log('[SplitLayout] Rendering split:', {...})  // Logs 200x/second
+console.log('[Terminal] Focus event:', event)         // Logs constantly
+```
+
+**What to Keep:**
+```typescript
+// ✅ KEEP - Important state changes
+console.log('[SimpleTerminalApp] Detaching from tmux session:', sessionName)
+
+// ✅ KEEP - Error conditions
+console.error('[WebSocket] Connection failed:', error)
+
+// ✅ KEEP - Warnings about unexpected states
+console.warn('[Terminal] agentId not found for terminal:', terminalId)
+```
+
+**Key Insight:**
+- Debug logging is great during development
+- Clean it up before committing or make it conditional on DEBUG flag
+- High-frequency logs (render, mousemove, resize) should always be removed
+
+**Prevention:**
+```typescript
+// Use a debug flag
+const DEBUG = false
+if (DEBUG) console.log('[Component] Rendering...')
+```
+
+**Files:** `src/components/SplitLayout.tsx` (removed lines)
+
+**Reference:** `docs/SPLIT_PERFORMANCE_FIXES_v2.md`
+
+---
+
+## xterm.js & Terminal Rendering
+
+### Lesson: Tmux Sessions Need Different Resize Strategy (Nov 12, 2025)
+
+**Problem:** Native tmux splits had flickering content, disappeared when clicking between panes.
+
+**Root Cause:** Multiple resize events interfering with tmux's internal pane management:
+- ResizeObserver firing on ANY container change (clicks, focus, layout)
+- Focus events triggering resize
+- Tab switch triggering resize
+- ALL of these sent resize to PTY → tmux tried to resize → content cleared
+
+**Solution - Tmux Resize Policy:**
+
+**✅ DO resize for tmux:**
+- ONCE on initial connection (sets viewport dimensions)
+- ONLY on actual browser window resize
+
+**❌ DON'T resize for tmux:**
+- ResizeObserver events (don't even set it up!)
+- Focus events
+- Tab switching
+- Container changes
+- Hot refresh recovery
+
+**Implementation:**
+```typescript
+// 1. Skip ResizeObserver setup entirely
+if (useTmux) {
+  console.log('[Resize] Skipping ResizeObserver (tmux session)')
+  return  // Don't set up observer at all
+}
+
+// 2. Skip focus resize
+if (!useTmux && isTerminalReady && fitAddon && xterm) {
+  // Only send resize for non-tmux terminals
+} else if (useTmux) {
+  console.log('[Terminal] FOCUS (tmux): skipping resize')
+}
+
+// 3. Send initial resize ONLY ONCE
+const initialResizeSentRef = useRef(false)
+const shouldSendInitialResize = !useTmux || !initialResizeSentRef.current
+
+if (shouldSendInitialResize) {
+  sendResize()
+  if (useTmux) initialResizeSentRef.current = true
+}
+```
+
+**Why All 3 Are Needed:**
+- Without #1: Container changes trigger resize
+- Without #2: Clicking between panes triggers resize
+- Without #3: Tab switching triggers resize
+
+**Key Insight:**
+- Native tmux splits = single xterm viewport showing entire session
+- React splits = separate terminals → resize independently
+- Tmux manages its own panes → only tell it the viewport size, then hands off
+
+**Files:**
+- `src/hooks/useTerminalResize.ts:129-131` - Skip ResizeObserver
+- `src/components/Terminal.tsx:393-424` - Skip focus resize
+- `src/components/Terminal.tsx:499-533` - Initial resize once
+
+**Reference:** `docs/TMUX_RENDERING_FINAL.md`
+
+---
+
+### Lesson: Account for Fixed Headers in Layout Calculations (Nov 12, 2025)
+
+**Problem:** Terminal was 47px too tall, causing tmux panes to overflow.
+
+**Root Cause:** Fixed header (47px) not accounted for in xterm.js FitAddon calculations.
+
+**Solution:**
+```css
+.terminal-display {
+  padding-top: 47px;  /* Match header height exactly */
+}
+```
+
+**Key Insight:**
+- FitAddon calculates based on container dimensions
+- Fixed/absolute positioned elements reduce available space
+- Add padding to terminal container = FitAddon gets correct dimensions
+
+**Prevention:**
+- When adding fixed headers/footers, add corresponding padding to terminal container
+- Test with `htop` or other TUI tools that use full terminal height
+
+**Files:**
+- `src/SimpleTerminalApp.css:1001-1018` - Header padding
+
+**Reference:** `docs/TMUX_RENDERING_FINAL.md`
+
+---
+
+### Lesson: Backend Debouncing Prevents Dimension Thrashing (Nov 12, 2025)
+
+**Problem:** Multiple resize events with slightly different dimensions (310 vs 308) hitting same PTY.
+
+**Solution:**
+```javascript
+// Backend PTY handler
+this.resizeTimers = new Map()
+this.resizeDebounceMs = 300
+
+// Debounce resize per terminal
+clearTimeout(this.resizeTimers.get(terminalId))
+this.resizeTimers.set(terminalId, setTimeout(() => {
+  ptyProcess.resize(cols, rows)
+}, this.resizeDebounceMs))
+```
+
+**Key Insight:**
+- Even with frontend debouncing, multiple clients or race conditions can send rapid resizes
+- Backend debouncing is last line of defense
+- Last resize wins after timeout → prevents dimension thrashing in PTY
+
+**Files:**
+- `backend/modules/pty-handler.js:38-46, 487-564` - Debouncing
+
+**Reference:** `docs/TMUX_RENDERING_FINAL.md`
+
+---
+
+## Testing Infrastructure
+
+### Lesson: Mock Classes Need Constructor Syntax (Nov 12, 2025)
+
+**Problem:** `ResizeObserver is not a constructor` error in tests.
+
+**Root Cause:** Using `vi.fn().mockImplementation()` creates a function, not a class constructor.
+
+**Wrong Approach:**
+```typescript
+// ❌ BROKEN - not a constructor
+global.ResizeObserver = vi.fn().mockImplementation(() => ({
+  observe: vi.fn(),
+  unobserve: vi.fn(),
+  disconnect: vi.fn()
+}))
+```
+
+**Right Approach:**
+```typescript
+// ✅ WORKS - class syntax
+global.ResizeObserver = class ResizeObserver {
+  observe = vi.fn()
+  unobserve = vi.fn()
+  disconnect = vi.fn()
+}
+```
+
+**Key Insight:**
+- Browser APIs instantiated with `new` need class syntax
+- Applies to: ResizeObserver, IntersectionObserver, WebSocket, etc.
+- `vi.fn()` is for function mocks, not constructor mocks
+
+**Prevention:**
+- Check how the API is used: `new ResizeObserver()` → use class
+- Test your test infrastructure first (smoke tests!)
+
+**Files:**
+- `tests/setup.ts` - Global mocks with class syntax
+
+**Reference:** `docs/TEST_INFRASTRUCTURE_SUMMARY.md`
+
+---
+
+### Lesson: WebSocket Mocks Need Message Simulation (Nov 12, 2025)
+
+**Problem:** Testing WebSocket interactions requires simulating server messages.
+
+**Solution:**
+```typescript
+class MockWebSocket {
+  constructor(url: string) {
+    this.url = url
+    this.readyState = WebSocket.CONNECTING
+  }
+
+  // Simulate server events
+  simulateOpen() {
+    this.readyState = WebSocket.OPEN
+    this.onopen?.(new Event('open'))
+  }
+
+  simulateMessage(data: any) {
+    this.onmessage?.(new MessageEvent('message', {
+      data: JSON.stringify(data)
+    }))
+  }
+
+  simulateClose() {
+    this.readyState = WebSocket.CLOSED
+    this.onclose?.(new CloseEvent('close'))
+  }
+
+  // Track sent messages
+  getSentMessages() {
+    return this.sentMessages
+  }
+}
+```
+
+**Key Insight:**
+- WebSocket is bidirectional → need to mock both directions
+- Track outgoing messages for assertions
+- Simulate incoming messages for testing handlers
+- Control ready state for connection lifecycle tests
+
+**Files:**
+- `tests/mocks/MockWebSocket.ts` - Full WebSocket mock
+
+**Reference:** `docs/TEST_INFRASTRUCTURE_SUMMARY.md`
+
+---
+
+## Multi-Window Architecture
+
+### Lesson: Backend Broadcasting Breaks Multi-Window (Nov 12, 2025)
+
+**Problem:** Terminals in Window A received output from terminals in Window B, causing escape sequence corruption.
+
+**Root Cause:** Backend was broadcasting terminal output to ALL WebSocket clients instead of routing to specific owner.
+
+**Wrong Approach:**
+```javascript
+// ❌ BROKEN - broadcasts to everyone
+terminalRegistry.on('output', (terminalId, data) => {
+  wss.clients.forEach(client => {
+    client.send(JSON.stringify({ type: 'terminal-output', ... }))
+  })
+})
+```
+
+**Right Approach:**
+```javascript
+// ✅ CORRECT - only send to owners
+const terminalOwners = new Map()  // terminalId -> Set<WebSocket>
+
+// Register ownership on spawn/reconnect
+terminalOwners.get(terminalId).add(ws)
+
+// Route output to owners only
+terminalRegistry.on('output', (terminalId, data) => {
+  const owners = terminalOwners.get(terminalId)
+  owners.forEach(client => {
+    client.send(JSON.stringify({ type: 'terminal-output', ... }))
+  })
+})
+```
+
+**Key Insight:**
+- Multi-window = multiple clients connected to same backend
+- Terminal output must be routed to specific client(s), not broadcast
+- Use ownership tracking map to route messages correctly
+
+**Files:**
+- `backend/server.js:114-443` - terminalOwners map
+
+**Reference:** CLAUDE.md "Critical Architecture (Popout Flow)"
+
+---
+
+## Z-Index & Stacking Contexts
+
+### Lesson: Establish Clear Z-Index Hierarchy (Nov 12, 2025)
+
+**Problem:** Focus indicators visible under one pane but over another, resize handle sometimes unclickable.
+
+**Root Cause:** Inconsistent z-index values and stacking contexts.
+
+**Solution - Establish Clear Hierarchy:**
+```css
+/* Define clear z-index scale */
+.react-resizable-handle {
+  z-index: 50;  /* Highest - always grabbable */
+}
+
+.split-pane-right.focused::before,
+.split-pane-bottom.focused::before {
+  z-index: 40;  /* Medium - visible but below handle */
+}
+
+/* Split panes use default stacking (lowest) */
+.split-pane-left,
+.split-pane-right {
+  background: transparent;
+  isolation: isolate;  /* Create stacking context */
+}
+```
+
+**Key Insight:**
+- Define z-index scale upfront (e.g., 10 = normal, 50 = overlay, 100 = modal)
+- Interactive elements (handles, buttons) should be highest
+- Visual indicators below interactive elements
+- Use `isolation: isolate` to prevent stacking context bleed
+
+**Files:**
+- `src/components/SplitLayout.css` - Z-index hierarchy
+
+**Reference:** `docs/SPLIT_TERMINAL_FIXES.md`
+
+---
+
 **Last Updated**: November 13, 2025

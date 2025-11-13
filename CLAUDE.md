@@ -418,28 +418,39 @@ Use intuitive aliases in spawn-options:
 
 ## 📜 Documentation Index
 
-### Core Documentation
+### Core Documentation (Root Directory)
 
 - **[CLAUDE.md](CLAUDE.md)** (this file) - Architecture, development rules, current system state
 - **[README.md](README.md)** - User-facing documentation, getting started, features
 - **[CHANGELOG.md](CHANGELOG.md)** - Version history, bug fixes, feature additions
 - **[LESSONS_LEARNED.md](LESSONS_LEARNED.md)** - Technical insights, common pitfalls, prevention strategies
 
-### Development Planning
+### Development Planning (Root Directory)
 
 - **[PLAN.md](PLAN.md)** - Refactoring roadmap, technical debt, future improvements
-- **[NEXT_SESSION_PROMPT.md](NEXT_SESSION_PROMPT.md)** - Session summaries, debugging notes
+- **[NEXT_SESSION_PROMPT.md](NEXT_SESSION_PROMPT.md)** - Session summaries, debugging notes, next steps
 
-### Specialized Documentation
+### Archived Documentation (docs/ folder)
 
-- **[OPUSTRATOR_IMPROVEMENTS.md](OPUSTRATOR_IMPROVEMENTS.md)** - Improvements from parent project
-- **[SPLIT_TERMINAL_FIXES.md](SPLIT_TERMINAL_FIXES.md)** - Split terminal implementation details
-- **[TEST_COVERAGE_SUMMARY.md](TEST_COVERAGE_SUMMARY.md)** - Test suite coverage analysis
+#### Split Terminal Implementation
+- **[docs/SPLIT_TERMINAL_FIXES.md](docs/SPLIT_TERMINAL_FIXES.md)** - Split terminal visual & performance fixes (completed)
+- **[docs/SPLIT_PERFORMANCE_FIXES_v2.md](docs/SPLIT_PERFORMANCE_FIXES_v2.md)** - React.memo, throttling, performance optimizations (completed)
 
-### Legacy/Reference Docs
+#### Tmux Integration
+- **[docs/TMUX_RENDERING_FINAL.md](docs/TMUX_RENDERING_FINAL.md)** - Complete tmux rendering solution (completed)
+- **[docs/TMUX_RENDERING_FIX.md](docs/TMUX_RENDERING_FIX.md)** - Initial tmux rendering debugging (superseded by FINAL)
+- **[docs/TMUX_SPLIT_RENDERING_DEBUG.md](docs/TMUX_SPLIT_RENDERING_DEBUG.md)** - Tmux split debugging notes (historical)
+- **[docs/TMUX_MIGRATION_PLAN.md](docs/TMUX_MIGRATION_PLAN.md)** - Tmux migration planning (historical)
 
-- **TMUX_*.md** - Historical tmux integration debugging (reference only)
-- **TESTING_*.md** - Historical testing infrastructure notes (reference only)
+#### Testing Infrastructure
+- **[docs/TEST_INFRASTRUCTURE_SUMMARY.md](docs/TEST_INFRASTRUCTURE_SUMMARY.md)** - Test setup documentation (completed)
+- **[docs/TEST_COVERAGE_SUMMARY.md](docs/TEST_COVERAGE_SUMMARY.md)** - Coverage analysis (historical)
+- **[docs/TESTING_SUMMARY.md](docs/TESTING_SUMMARY.md)** - Testing workflow notes (historical)
+- **[docs/TESTING_PROMPT.md](docs/TESTING_PROMPT.md)** - Testing prompts (historical)
+
+#### Legacy/Reference
+- **[docs/CONTINUATION_PROMPT.md](docs/CONTINUATION_PROMPT.md)** - Legacy session prompts
+- **[docs/OPUSTRATOR_IMPROVEMENTS.md](docs/OPUSTRATOR_IMPROVEMENTS.md)** - Improvements from parent project
 
 **Quick Navigation:**
 - 🐛 Debugging a bug? → [LESSONS_LEARNED.md](LESSONS_LEARNED.md)
@@ -447,6 +458,7 @@ Use intuitive aliases in spawn-options:
 - 🏗️ Planning refactoring? → [PLAN.md](PLAN.md)
 - 📖 User documentation? → [README.md](README.md)
 - 🧭 Understanding architecture? → This file
+- 📚 Historical reference? → [docs/](docs/) folder
 
 ---
 
