@@ -1868,6 +1868,7 @@
   position: relative;
   display: flex;
   align-items: center;
+  z-index: 102; /* Above tab-bar (101) so dropdown doesn't get overlapped */
 }
 
 .detached-header-button {
@@ -1894,9 +1895,8 @@
 
 /* Detached Dropdown Menu */
 .detached-dropdown {
-  position: absolute;
-  top: 100%;
-  left: 0;
+  position: fixed !important;
+  /* top and left will be set via inline styles */
   min-width: 300px;
   max-width: 500px;
   max-height: 400px;
@@ -1905,8 +1905,7 @@
   border: 1px solid rgba(255, 200, 0, 0.3);
   border-radius: 8px;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
-  z-index: 10002;
-  margin-top: 4px;
+  z-index: 10002 !important;
   animation: dropdownSlideIn 0.2s ease-out;
 }
 

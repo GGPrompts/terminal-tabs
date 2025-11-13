@@ -41,8 +41,9 @@ export function usePopout(
    *
    * @param terminalId - ID of terminal to pop out
    * @param targetWindowId - Optional target window ID (generates new if not provided)
+   * @param popoutMode - 'tab' opens in new browser tab, 'window' opens as separate popup window
    */
-  const handlePopOutTab = async (terminalId: string, targetWindowId?: string) => {
+  const handlePopOutTab = async (terminalId: string, targetWindowId?: string, popoutMode: 'tab' | 'window' = 'tab') => {
     const terminal = storedTerminals.find(t => t.id === terminalId)
     if (!terminal) return
 
@@ -126,9 +127,10 @@ export function usePopout(
 
       // Wait for localStorage sync, then open new window
       setTimeout(() => {
-        console.log(`[usePopout] Opening new window for ${terminal.name}`)
+        console.log(`[usePopout] Opening new window for ${terminal.name} (mode: ${popoutMode})`)
         const url = `${window.location.origin}${window.location.pathname}?window=${paneWindowId}&active=${terminalId}`
-        const newWin = window.open(url, `tabz-${paneWindowId}`, 'width=800,height=600')
+        const windowFeatures = popoutMode === 'window' ? 'popup,width=1200,height=800' : undefined
+        const newWin = window.open(url, `tabz-${paneWindowId}`, windowFeatures)
 
         if (!newWin) {
           console.error('[usePopout] Failed to open window (popup blocked?)')
@@ -238,12 +240,13 @@ export function usePopout(
 
       // Step 6: Wait for localStorage sync, then open SEPARATE windows for each pane
       setTimeout(() => {
-        console.log(`[usePopout] Opening ${paneUpdates.length} separate windows`)
+        console.log(`[usePopout] Opening ${paneUpdates.length} separate windows (mode: ${popoutMode})`)
         let successCount = 0
+        const windowFeatures = popoutMode === 'window' ? 'popup,width=1200,height=800' : undefined
 
         for (const { terminalId: paneId, newWindowId, sessionName } of paneUpdates) {
           const url = `${window.location.origin}${window.location.pathname}?window=${newWindowId}&active=${paneId}`
-          const newWin = window.open(url, `tabz-${newWindowId}`, 'width=800,height=600')
+          const newWin = window.open(url, `tabz-${newWindowId}`, windowFeatures)
 
           if (newWin) {
             successCount++
@@ -354,10 +357,11 @@ export function usePopout(
     // CRITICAL: Must wait for Zustand localStorage sync (debounced with 100ms delay)
     // to complete before opening new window, otherwise new window won't see updated windowId
     setTimeout(() => {
-      console.log(`[usePopout] Step 5: Opening new window`)
+      console.log(`[usePopout] Step 5: Opening new window (mode: ${popoutMode})`)
       // Pass both windowId AND the terminalId to activate in the new window
       const url = `${window.location.origin}${window.location.pathname}?window=${newWindowId}&active=${terminalId}`
-      const newWin = window.open(url, `tabz-${newWindowId}`)
+      const windowFeatures = popoutMode === 'window' ? 'popup,width=1200,height=800' : undefined
+      const newWin = window.open(url, `tabz-${newWindowId}`, windowFeatures)
 
       if (!newWin) {
         console.error('[usePopout] Failed to open new window (popup blocked?)')

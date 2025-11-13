@@ -378,7 +378,7 @@ describe('usePopout - Split Terminal Popout', () => {
       expect(mockWindowOpen).toHaveBeenCalledWith(
         'http://localhost:5173/?window=window-new-456&active=pane-left',
         'tabz-window-new-456',
-        'width=800,height=600'
+        'popup,width=1200,height=800' // Updated to match new popout window features
       )
     })
   })
@@ -944,8 +944,8 @@ describe('usePopout - Split Terminal Popout', () => {
       vi.advanceTimersByTime(600)
       expect(mockWindowOpen).toHaveBeenCalledWith(
         'http://localhost:5173/?window=window-single-123&active=single-1',
-        'tabz-window-single-123'
-        // Note: Single terminal doesn't pass window size (2 args only)
+        'tabz-window-single-123',
+        undefined // Tab mode passes undefined for window features
       )
     })
 

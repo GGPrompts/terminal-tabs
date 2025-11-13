@@ -73,6 +73,11 @@ export function useWebSocketManager(
       console.log('[useWebSocketManager] 🧹 Clearing stale agentIds from localStorage terminals')
 
       storedTerminals.forEach(terminal => {
+        // Skip detached terminals - they should stay detached
+        if (terminal.status === 'detached') {
+          return
+        }
+
         if (terminal.agentId || terminal.status === 'active') {
           updateTerminal(terminal.id, {
             agentId: undefined,
@@ -203,12 +208,12 @@ export function useWebSocketManager(
           } else {
             // CRITICAL: Do NOT create terminal for unmatched spawns
             // Prevents cross-window contamination
-            console.warn('[useWebSocketManager] ⏭️ Ignoring terminal-spawned - no matching terminal', {
+            // Note: This is normal when terminals spawn in other windows (multi-window isolation)
+            console.log('[useWebSocketManager] ⏭️ Ignoring terminal-spawned from another window', {
               requestId: message.requestId,
               agentId: message.data.id,
               sessionName: message.data.sessionName,
-              allStoredTerminals: storedTerminals.length,
-              pendingSpawns: Array.from(pendingSpawns.current.keys())
+              currentWindow: currentWindowId,
             })
             return
           }
@@ -365,6 +370,12 @@ export function useWebSocketManager(
           // Process stored terminals
           storedTerminals.forEach(terminal => {
             if (terminal.sessionName && activeSessions.has(terminal.sessionName)) {
+              // Skip detached terminals - user explicitly detached them
+              if (terminal.status === 'detached') {
+                console.log(`[useWebSocketManager] 📌 Skipping detached terminal: ${terminal.sessionName}`)
+                return
+              }
+
               // Skip duplicates
               if (reconnectingSessionsSet.has(terminal.sessionName)) {
                 return

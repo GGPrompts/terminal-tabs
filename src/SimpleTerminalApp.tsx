@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react'
+import ReactDOM from 'react-dom'
 import './SimpleTerminalApp.css'
 import { Terminal } from './components/Terminal'
 import { SplitLayout } from './components/SplitLayout'
@@ -45,7 +46,7 @@ import { CSS } from '@dnd-kit/utilities'
 // Extend Window interface for handlePopOutTab
 declare global {
   interface Window {
-    handlePopOutTab?: (terminalId: string) => void
+    handlePopOutTab?: (terminalId: string, targetWindowId?: string, popoutMode?: 'tab' | 'window') => void
   }
 }
 
@@ -287,7 +288,20 @@ function SortableTab({ terminal, isActive, isFocused, isSplitActive, onActivate,
 function SimpleTerminalApp() {
   const [showSpawnMenu, setShowSpawnMenu] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
-  const [headerVisible, setHeaderVisible] = useState(true)
+
+  // Initialize currentWindowId first to determine header visibility
+  const [currentWindowId] = useState(() => {
+    const urlParams = new URLSearchParams(window.location.search)
+    const windowId = getCurrentWindowId(urlParams)
+    updateUrlWithWindowId(windowId)
+    return windowId
+  })
+
+  // Collapse header by default for popout windows (not main window)
+  const [headerVisible, setHeaderVisible] = useState(currentWindowId === 'main')
+
+  // BroadcastChannel for cross-window communication
+  const broadcastChannelRef = useRef<BroadcastChannel | null>(null)
 
   // Console error tracking
   const [consoleErrors, setConsoleErrors] = useState<Array<{
@@ -346,14 +360,6 @@ function SimpleTerminalApp() {
   const terminalRef = useRef<any>(null)
   const wsRef = useRef<WebSocket | null>(null) // Needed by both spawning and WebSocket hooks
   const pendingSpawns = useRef<Map<string, StoredTerminal>>(new Map()) // Track pending spawns by requestId
-
-  // Multi-window support: each browser window/tab has a unique ID
-  const [currentWindowId] = useState(() => {
-    const urlParams = new URLSearchParams(window.location.search)
-    const windowId = getCurrentWindowId(urlParams)
-    updateUrlWithWindowId(windowId)
-    return windowId
-  })
 
   const {
     terminals: storedTerminals,
@@ -505,6 +511,36 @@ function SimpleTerminalApp() {
       console.warn = originalWarn
     }
   }, [])
+
+  // Setup BroadcastChannel for cross-window communication
+  useEffect(() => {
+    const channel = new BroadcastChannel('tabz-sync')
+    broadcastChannelRef.current = channel
+
+    // Listen for messages from other windows
+    channel.onmessage = (event) => {
+      if (event.data.type === 'reload-all') {
+        console.log('[SimpleTerminalApp] 🔄 Received reload-all message from another window')
+        window.location.reload()
+      } else if (event.data.type === 'state-changed') {
+        // Force Zustand to re-read from localStorage
+        console.log('[SimpleTerminalApp] 🔄 State changed in another window, syncing...')
+        const storageEvent = new StorageEvent('storage', {
+          key: 'simple-terminal-storage',
+          newValue: localStorage.getItem('simple-terminal-storage'),
+          url: window.location.href,
+        })
+        window.dispatchEvent(storageEvent)
+      }
+    }
+
+    console.log('[SimpleTerminalApp] 📡 BroadcastChannel initialized for window:', currentWindowId)
+
+    return () => {
+      channel.close()
+      broadcastChannelRef.current = null
+    }
+  }, [currentWindowId])
 
   // Set browser tab title based on window and active terminal
   useEffect(() => {
@@ -789,9 +825,9 @@ function SimpleTerminalApp() {
   }
 
   // Handle "Pop out to new window" context menu option
-  const handleContextPopOut = () => {
+  const handleContextPopOut = (mode: 'tab' | 'window' = 'tab') => {
     if (!contextMenu.terminalId) return
-    handlePopOutTab(contextMenu.terminalId)
+    handlePopOutTab(contextMenu.terminalId, undefined, mode)
     setContextMenu({ show: false, x: 0, y: 0, terminalId: null })
   }
 
@@ -868,6 +904,11 @@ function SimpleTerminalApp() {
         agentId: undefined,
         windowId: undefined, // Clear window assignment
       })
+
+      // Notify other windows that state changed
+      if (broadcastChannelRef.current) {
+        broadcastChannelRef.current.postMessage({ type: 'state-changed' })
+      }
 
       console.log(`[SimpleTerminalApp] ✓ Detached split container with preserved layout`)
       setContextMenu({ show: false, x: 0, y: 0, terminalId: null })
@@ -953,6 +994,11 @@ function SimpleTerminalApp() {
           agentId: undefined, // Clear PTY connection so it can reconnect
           windowId: undefined, // Clear window assignment so it can reattach anywhere
         })
+
+        // Notify other windows that state changed
+        if (broadcastChannelRef.current) {
+          broadcastChannelRef.current.postMessage({ type: 'state-changed' })
+        }
       } else {
         console.error(`[SimpleTerminalApp] Failed to detach:`, result.error)
       }
@@ -1007,8 +1053,15 @@ function SimpleTerminalApp() {
               status: 'spawning',
             })
 
+            // Create updated pane terminal object with correct windowId
+            const updatedPaneTerminal = {
+              ...paneTerminal,
+              windowId: currentWindowId,
+              status: 'spawning' as const,
+            }
+
             // Reconnect the pane
-            await handleReconnectTerminal(paneTerminal, option)
+            await handleReconnectTerminal(updatedPaneTerminal, option)
           }
         }
       }
@@ -1021,6 +1074,12 @@ function SimpleTerminalApp() {
 
       // Set as active after all panes reconnected
       setActiveTerminal(terminalId)
+
+      // Notify other windows that state changed
+      if (broadcastChannelRef.current) {
+        broadcastChannelRef.current.postMessage({ type: 'state-changed' })
+      }
+
       console.log(`[SimpleTerminalApp] ✓ Re-attached split container with restored layout`)
       return
     }
@@ -1045,11 +1104,23 @@ function SimpleTerminalApp() {
       status: 'spawning',
     })
 
-    // Use existing reconnect logic
-    await handleReconnectTerminal(terminal, option)
+    // Create updated terminal object with correct windowId for reconnection
+    const updatedTerminal = {
+      ...terminal,
+      windowId: currentWindowId,
+      status: 'spawning' as const,
+    }
+
+    // Use existing reconnect logic with updated terminal
+    await handleReconnectTerminal(updatedTerminal, option)
 
     // Set as active after reconnecting
     setActiveTerminal(terminalId)
+
+    // Notify other windows that state changed
+    if (broadcastChannelRef.current) {
+      broadcastChannelRef.current.postMessage({ type: 'state-changed' })
+    }
   }
 
   const handleCloseTerminal = (terminalId: string) => {
@@ -1318,10 +1389,16 @@ ${localStorageKeys.map(k => `  • ${k}`).join('\n')}
 
     console.log('[SimpleTerminalApp] ✅ All sessions, settings, and localStorage cleared')
 
-    // Wait a bit more before reload to ensure everything is cleaned up
-    await new Promise(resolve => setTimeout(resolve, 200))
+    // Broadcast to all other windows to reload
+    if (broadcastChannelRef.current) {
+      broadcastChannelRef.current.postMessage({ type: 'reload-all' })
+      console.log('[SimpleTerminalApp] 📡 Sent reload-all message to all windows')
+    }
 
-    // Reload page to apply fresh defaults
+    // Wait a bit to ensure broadcast is sent and everything is cleaned up
+    await new Promise(resolve => setTimeout(resolve, 300))
+
+    // Reload this window to apply fresh defaults
     window.location.reload()
   }
 
@@ -1597,6 +1674,14 @@ End of error report
               className="detached-header-button"
               onClick={(e) => {
                 e.stopPropagation()
+                // Calculate dropdown position based on button position
+                if (detachedDropdownRef.current) {
+                  const rect = detachedDropdownRef.current.getBoundingClientRect()
+                  setDetachedDropdownPosition({
+                    top: rect.bottom + 4, // 4px gap
+                    left: rect.left
+                  })
+                }
                 setShowDetachedDropdown(!showDetachedDropdown)
               }}
               title={`${detachedTerminals.length} detached terminal(s)`}
@@ -1604,34 +1689,42 @@ End of error report
               📌 Detached ({detachedTerminals.length})
             </button>
 
-            {/* Dropdown Menu */}
-            {showDetachedDropdown && (
-              <div className="detached-dropdown">
-                <div className="detached-dropdown-header">
-                  Select terminal to reattach:
-                </div>
-                {detachedTerminals.map(terminal => (
-                  <div
-                    key={terminal.id}
-                    className="detached-dropdown-item"
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      handleReattachTerminal(terminal.id)
-                      setShowDetachedDropdown(false)
-                    }}
-                  >
-                    <span className="detached-dropdown-icon">{terminal.icon || '💻'}</span>
-                    <span className="detached-dropdown-name">{terminal.name}</span>
-                    {terminal.sessionName && (
-                      <span className="detached-dropdown-session">
-                        {terminal.sessionName}
-                      </span>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
           </div>
+        )}
+
+        {/* Dropdown Menu - Rendered via Portal to escape stacking context */}
+        {detachedTerminals.length > 0 && showDetachedDropdown && ReactDOM.createPortal(
+          <div
+            className="detached-dropdown"
+            style={{
+              top: `${detachedDropdownPosition.top}px`,
+              left: `${detachedDropdownPosition.left}px`
+            }}
+          >
+            <div className="detached-dropdown-header">
+              Select terminal to reattach:
+            </div>
+            {detachedTerminals.map(terminal => (
+              <div
+                key={terminal.id}
+                className="detached-dropdown-item"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  handleReattachTerminal(terminal.id)
+                  setShowDetachedDropdown(false)
+                }}
+              >
+                <span className="detached-dropdown-icon">{terminal.icon || '💻'}</span>
+                <span className="detached-dropdown-name">{terminal.name}</span>
+                {terminal.sessionName && (
+                  <span className="detached-dropdown-session">
+                    {terminal.sessionName}
+                  </span>
+                )}
+              </div>
+            ))}
+          </div>,
+          document.body
         )}
 
         <div className="header-actions">
@@ -2270,14 +2363,14 @@ End of error report
                   className="context-menu-item"
                   onClick={handleContextRename}
                 >
-                  Rename Tab...
+                  ✏️ Update Display Name...
                 </button>
                 {canDetach && (
                   <button
                     className="context-menu-item"
                     onClick={handleContextDetach}
                   >
-                    Detach
+                    📌 Detach
                   </button>
                 )}
                 {isInSplit && (
@@ -2285,14 +2378,20 @@ End of error report
                     className="context-menu-item"
                     onClick={handleContextUnsplit}
                   >
-                    Unsplit
+                    ↔️ Unsplit
                   </button>
                 )}
                 <button
                   className="context-menu-item"
-                  onClick={handleContextPopOut}
+                  onClick={() => handleContextPopOut('tab')}
                 >
-                  Pop out to new window
+                  🗂️ Open in New Tab
+                </button>
+                <button
+                  className="context-menu-item"
+                  onClick={() => handleContextPopOut('window')}
+                >
+                  ↗️ Open in Separate Window
                 </button>
                 <button
                   className="context-menu-item"
@@ -2303,7 +2402,7 @@ End of error report
                     }
                   }}
                 >
-                  Close Tab
+                  ❌ Kill Session
                 </button>
               </>
             )
@@ -2321,12 +2420,12 @@ End of error report
             className="rename-dialog"
             onClick={(e) => e.stopPropagation()}
           >
-            <h3>Rename Tab</h3>
+            <h3>Update Display Name</h3>
             <input
               type="text"
               value={renameDialog.currentName}
               onChange={(e) => setRenameDialog({ ...renameDialog, currentName: e.target.value })}
-              placeholder="Enter tab name"
+              placeholder="Enter display name"
               autoFocus
               onKeyDown={(e) => {
                 if (e.key === 'Enter') {
