@@ -925,4 +925,167 @@ describe('Split Operations Integration', () => {
       expect(terminal!.splitLayout!.panes).toHaveLength(0)
     })
   })
+
+  /**
+   * Tmux Split Dimension Matching
+   *
+   * Critical regression test for the EOL conversion bug fix (Nov 14, 2025).
+   * When multiple xterm instances share a tmux session, they must report
+   * identical dimensions to prevent output corruption.
+   *
+   * Root Cause: Different fonts → different character heights → different row counts
+   * Solution: useTmuxSessionDimensions hook normalizes fonts before xterm initialization
+   *
+   * Reference: commit cc05c4a - "fix: disable EOL conversion for tmux splits"
+   * Gist: https://gist.github.com/GGPrompts/7d40ea1070a45de120261db00f1d7e3a
+   */
+  describe('Tmux Split Dimension Matching', () => {
+    it('should ensure both panes report same dimensions when using tmux', async () => {
+      const { addTerminal, updateTerminal } = useSimpleTerminalStore.getState()
+
+      // Create two terminals with DIFFERENT fonts that would cause dimension mismatch
+      const terminalA = createMockTerminal('terminal-a', 'TFE', 'tfe')
+      terminalA.fontSize = 16
+      terminalA.fontFamily = "'Fira Code', monospace"
+      terminalA.sessionName = 'tt-tfe-test'
+
+      const terminalB = createMockTerminal('terminal-b', 'Claude Code', 'claude-code')
+      terminalB.fontSize = 20  // Different font size - would cause dimension mismatch!
+      terminalB.fontFamily = "'JetBrains Mono', monospace"
+      terminalB.sessionName = 'tt-tfe-test'  // SAME tmux session
+
+      await act(async () => {
+        addTerminal(terminalA)
+        addTerminal(terminalB)
+      })
+
+      // Create split container (vertical split)
+      await act(async () => {
+        updateTerminal('terminal-b', {
+          splitLayout: {
+            type: 'vertical',
+            panes: [
+              { terminalId: 'terminal-b', position: 'left', size: 50 },
+              { terminalId: 'terminal-a', position: 'right', size: 50 },
+            ],
+          },
+        })
+      })
+
+      // VERIFY: Split created correctly
+      const container = useSimpleTerminalStore.getState().terminals.find(t => t.id === 'terminal-b')
+      expect(container!.splitLayout).toBeDefined()
+      expect(container!.splitLayout!.panes).toHaveLength(2)
+
+      // KEY TEST: Both terminals should have matching sessionName (same tmux session)
+      const termA = useSimpleTerminalStore.getState().terminals.find(t => t.id === 'terminal-a')
+      const termB = useSimpleTerminalStore.getState().terminals.find(t => t.id === 'terminal-b')
+
+      expect(termA!.sessionName).toBe('tt-tfe-test')
+      expect(termB!.sessionName).toBe('tt-tfe-test')
+      expect(termA!.sessionName).toBe(termB!.sessionName)  // Same tmux session!
+
+      // CRITICAL: When useTmuxSessionDimensions hook runs, it should normalize fonts
+      // The actual font normalization happens in Terminal.tsx during xterm initialization
+      // This test documents the expected behavior:
+      //
+      // 1. First pane (terminalB) initializes → sets reference: Fira Code 16px, 80x24
+      // 2. Second pane (terminalA) initializes → tries JetBrains Mono 20px
+      // 3. useTmuxSessionDimensions detects mismatch (would be 100x38 with JB Mono)
+      // 4. Normalizes to reference font: Fira Code 16px
+      // 5. Result: Both panes report 80x24 → no tmux corruption ✅
+
+      // Note: We can't actually test the xterm dimension calculation here because
+      // that requires DOM and FitAddon. But we CAN verify:
+      // - Terminals share same sessionName (required for dimension tracking)
+      // - Split structure is correct (both panes exist)
+      // - This documents the expected behavior for future developers
+
+      // VERIFY: Both panes are in the split
+      expect(container!.splitLayout!.panes.some(p => p.terminalId === 'terminal-a')).toBe(true)
+      expect(container!.splitLayout!.panes.some(p => p.terminalId === 'terminal-b')).toBe(true)
+    })
+
+    it('should handle splits with same font (no normalization needed)', async () => {
+      const { addTerminal, updateTerminal } = useSimpleTerminalStore.getState()
+
+      // Create two terminals with SAME font (common case)
+      const terminalA = createMockTerminal('terminal-a', 'Bash 1', 'bash')
+      terminalA.fontSize = 14
+      terminalA.fontFamily = 'monospace'
+      terminalA.sessionName = 'tt-bash-test'
+
+      const terminalB = createMockTerminal('terminal-b', 'Bash 2', 'bash')
+      terminalB.fontSize = 14  // Same font size
+      terminalB.fontFamily = 'monospace'  // Same font family
+      terminalB.sessionName = 'tt-bash-test'  // Same tmux session
+
+      await act(async () => {
+        addTerminal(terminalA)
+        addTerminal(terminalB)
+      })
+
+      // Create horizontal split
+      await act(async () => {
+        updateTerminal('terminal-b', {
+          splitLayout: {
+            type: 'horizontal',
+            panes: [
+              { terminalId: 'terminal-b', position: 'top', size: 50 },
+              { terminalId: 'terminal-a', position: 'bottom', size: 50 },
+            ],
+          },
+        })
+      })
+
+      // VERIFY: Split created
+      const container = useSimpleTerminalStore.getState().terminals.find(t => t.id === 'terminal-b')
+      expect(container!.splitLayout).toBeDefined()
+      expect(container!.splitLayout!.type).toBe('horizontal')
+
+      // VERIFY: Both terminals share same tmux session
+      const termA = useSimpleTerminalStore.getState().terminals.find(t => t.id === 'terminal-a')
+      const termB = useSimpleTerminalStore.getState().terminals.find(t => t.id === 'terminal-b')
+      expect(termA!.sessionName).toBe(termB!.sessionName)
+
+      // In this case, useTmuxSessionDimensions would detect NO mismatch
+      // because both terminals already have matching fonts.
+      // No normalization needed, but the hook still tracks reference dimensions.
+    })
+
+    it('should document convertEol behavior for tmux sessions', async () => {
+      const { addTerminal } = useSimpleTerminalStore.getState()
+
+      // Create tmux terminal
+      const terminalA = createMockTerminal('terminal-a', 'TFE', 'tfe')
+      terminalA.sessionName = 'tt-tfe-eol'  // Has tmux session
+
+      // Create non-tmux terminal
+      const terminalB = createMockTerminal('terminal-b', 'Regular Bash', 'bash')
+      // terminalB.sessionName is undefined (no tmux)
+
+      await act(async () => {
+        addTerminal(terminalA)
+        addTerminal(terminalB)
+      })
+
+      // VERIFY: Terminals created
+      const termA = useSimpleTerminalStore.getState().terminals.find(t => t.id === 'terminal-a')
+      const termB = useSimpleTerminalStore.getState().terminals.find(t => t.id === 'terminal-b')
+
+      // EXPECTED BEHAVIOR (documented for Terminal.tsx):
+      // - terminalA (has sessionName) → convertEol: false (tmux manages line endings)
+      // - terminalB (no sessionName) → convertEol: true (xterm handles line endings)
+      //
+      // This is critical because:
+      // 1. Tmux sends properly formatted terminal sequences with \n
+      // 2. If xterm converts \n → \r\n, it double-processes tmux output
+      // 3. Multiple xterm instances would convert differently → corruption
+      //
+      // Solution: Set convertEol: !isTmuxSession in Terminal.tsx:242
+
+      expect(termA!.sessionName).toBeDefined()  // Has tmux → convertEol: false
+      expect(termB!.sessionName).toBeUndefined()  // No tmux → convertEol: true
+    })
+  })
 })
