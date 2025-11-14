@@ -76,6 +76,155 @@ await fetch(`/api/tmux/detach/${sessionName}`, { method: 'POST' })
 
 ---
 
+## Split Terminal Architecture
+
+### Lesson: Split Container IS the Terminal (Nov 14, 2025)
+
+**Problem**: Unsplitting caused one terminal to disappear completely.
+
+**What Happened:**
+1. User drags Terminal A onto Terminal B to create split
+2. User unsplits by popping out Terminal A
+3. Terminal B disappeared! Only Terminal A remained visible
+
+**Root Cause**: Misunderstanding of split architecture:
+```typescript
+// When dragging A onto B:
+updateTerminal(B.id, {  // B becomes the CONTAINER
+  splitLayout: {
+    type: 'vertical',
+    panes: [
+      { terminalId: B.id },  // B references itself!
+      { terminalId: A.id }
+    ]
+  }
+})
+```
+
+The split container **IS** one of the original terminals (Terminal B), not a new entity!
+
+**Wrong Fix (What We Tried First)**:
+```typescript
+// Delete the container when 1 pane remains
+removeTerminal(splitContainer.id)  // ❌ DELETES Terminal B!
+```
+
+**Correct Fix**:
+```typescript
+// Clear the split layout, don't delete the container
+updateTerminal(splitContainer.id, {
+  splitLayout: { type: 'single', panes: [] }  // ✓ Converts B back to normal terminal
+})
+```
+
+**Key Insights**:
+- Split container = one of the original terminals, not a wrapper
+- The container terminal keeps its ID, name, theme, etc.
+- Never delete the container - just clear its `splitLayout` property
+- Check if remaining pane IS the container before unhiding
+
+**Prevention Checklist**:
+- [ ] Does this operation delete a terminal that might be a split container?
+- [ ] Could the pane I'm operating on be the container itself?
+- [ ] Am I clearing state vs. deleting entities?
+
+**Files**:
+- `src/SimpleTerminalApp.tsx:1392-1408` - Fixed unsplit logic
+- `src/hooks/useDragDrop.ts:277-283` - How splits are created
+
+---
+
+## Multi-Window State Synchronization
+
+### Lesson: Cross-Window State Changes Require Local Cleanup (Nov 14, 2025)
+
+**Problem**: After detaching terminal in Window B, Window A showed terminal stuck on "reconnecting" forever.
+
+**What Happened:**
+1. Window A: Terminal connected with active WebSocket agent
+2. Window B: User clicks "Detach" on same terminal
+3. Window B: Calls backend, updates state, broadcasts to Window A
+4. Window A: Receives broadcast, updates terminal status to 'detached'
+5. Window A: **But WebSocket agent still exists!**
+6. Window A: Terminal shows "reconnecting" because `status='detached'` but `agent` exists
+
+**Root Cause**: Zustand store syncs via BroadcastChannel, but WebSocket agents are local React state:
+```typescript
+// Window B detaches:
+updateTerminal(id, { status: 'detached', agentId: undefined })  // Syncs via broadcast
+
+// Window A receives broadcast:
+setState({ terminals: [...] })  // ✓ Terminal updated
+// But webSocketAgents state is NOT synced! ❌
+```
+
+**Solution**: Monitor terminal status changes and clean up local agents:
+```typescript
+// In useWebSocketManager.ts
+useEffect(() => {
+  const detachedTerminals = storedTerminals.filter(t =>
+    t.status === 'detached' && t.agentId
+  )
+
+  detachedTerminals.forEach(terminal => {
+    if (webSocketAgents.some(a => a.id === terminal.agentId)) {
+      // Send disconnect to backend
+      wsRef.current.send(JSON.stringify({
+        type: 'disconnect',
+        data: { terminalId: terminal.agentId }
+      }))
+
+      // Remove from local state
+      setWebSocketAgents(prev => prev.filter(a => a.id !== terminal.agentId))
+
+      // Clear agentId
+      updateTerminal(terminal.id, { agentId: undefined })
+    }
+  })
+}, [storedTerminals, webSocketAgents])
+```
+
+**Key Insights**:
+- BroadcastChannel only syncs what you explicitly send (Zustand state)
+- Local React state (agents, refs) doesn't sync automatically
+- When remote window changes terminal status, local window must clean up side effects
+- Status changes can come from broadcasts, not just local actions
+
+**Prevention Checklist**:
+- [ ] Does this terminal have local side effects? (WebSocket, refs, timers)
+- [ ] Can terminal status change via broadcast from another window?
+- [ ] Do we watch for status changes and clean up local state?
+- [ ] Are we handling both local AND remote state changes?
+
+**Anti-Pattern to Avoid**:
+```typescript
+// ❌ Only handling local detach
+const handleDetach = () => {
+  updateTerminal(id, { status: 'detached' })
+  setWebSocketAgents(prev => prev.filter(...))  // Only runs in this window!
+}
+```
+
+**Correct Pattern**:
+```typescript
+// ✓ Handle both local and remote detach
+const handleDetach = () => {
+  updateTerminal(id, { status: 'detached' })  // Syncs to other windows
+  setWebSocketAgents(prev => prev.filter(...))  // Local cleanup
+}
+
+// ✓ Also watch for remote detach
+useEffect(() => {
+  // Clean up agents for terminals detached in other windows
+}, [storedTerminals.status])
+```
+
+**Files**:
+- `src/hooks/useWebSocketManager.ts:115-140` - Agent cleanup on detach
+- `src/SimpleTerminalApp.tsx:544-581` - BroadcastChannel state sync
+
+---
+
 ## Debugging Patterns
 
 ### Pattern: Add Diagnostic Logging Before Fixing

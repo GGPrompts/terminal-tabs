@@ -1390,11 +1390,22 @@ function SimpleTerminalApp() {
     )
 
     if (remainingPanes.length === 1) {
-      // Only 1 pane left - convert split container back to single terminal
-      console.log(`[SimpleTerminalApp] Only 1 pane remaining, converting split to single terminal`)
+      // Only 1 pane left - convert split back to single terminal
+      const remainingTerminalId = remainingPanes[0].terminalId
+      console.log(`[SimpleTerminalApp] Only 1 pane remaining, clearing split layout on container: ${splitContainer.id}`)
+
+      // Clear the split layout from the container (convert back to single terminal)
       updateTerminal(splitContainer.id, {
         splitLayout: { type: 'single', panes: [] }
       })
+
+      // If the remaining pane is different from the container, unhide it
+      if (remainingTerminalId !== splitContainer.id) {
+        console.log(`[SimpleTerminalApp] Unhiding remaining pane: ${remainingTerminalId}`)
+        updateTerminal(remainingTerminalId, {
+          isHidden: false
+        })
+      }
     } else if (remainingPanes.length > 1) {
       // Still have multiple panes
       updateTerminal(splitContainer.id, {

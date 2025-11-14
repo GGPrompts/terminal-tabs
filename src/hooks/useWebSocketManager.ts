@@ -112,6 +112,33 @@ export function useWebSocketManager(
     }
   }, [connectionStatus])
 
+  // Clean up agents for terminals that become detached (via broadcast from other windows)
+  useEffect(() => {
+    const detachedTerminals = storedTerminals.filter(t => t.status === 'detached' && t.agentId)
+
+    detachedTerminals.forEach(terminal => {
+      const hasAgent = webSocketAgents.some(a => a.id === terminal.agentId)
+
+      if (hasAgent && terminal.agentId) {
+        console.log('[useWebSocketManager] 🧹 Cleaning up agent for detached terminal:', terminal.name)
+
+        // Send disconnect to backend
+        if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+          wsRef.current.send(JSON.stringify({
+            type: 'disconnect',
+            data: { terminalId: terminal.agentId }
+          }))
+        }
+
+        // Remove agent from local state
+        setWebSocketAgents(prev => prev.filter(a => a.id !== terminal.agentId))
+
+        // Clear agentId from terminal
+        updateTerminal(terminal.id, { agentId: undefined })
+      }
+    })
+  }, [storedTerminals, webSocketAgents])
+
   /**
    * Handle WebSocket messages - routes messages to appropriate handlers
    * CRITICAL: Implements window isolation to prevent cross-window contamination

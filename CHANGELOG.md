@@ -7,6 +7,56 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.2.5] - 2025-11-14
+
+### 🐛 Critical Bug Fixes
+
+#### Fixed: Terminal Disappearing After Unsplit
+- **Root Cause**: Split container IS the terminal itself, not a separate entity
+  - When creating a split by dragging terminal A onto terminal B:
+    - Terminal B becomes the split container (keeps its ID)
+    - Terminal A becomes a pane (referenced by the container)
+  - Old unsplit logic deleted the split container when 1 pane remained
+  - This deleted terminal B completely! Only terminal A remained visible
+
+- **The Fix**: Clear split layout instead of deleting container
+  - Convert split container back to single terminal: `{ type: 'single', panes: [] }`
+  - Only unhide remaining pane if it's different from the container
+  - Both terminals now remain visible after unsplit ✓
+
+- **Files Modified**:
+  - `src/SimpleTerminalApp.tsx` - `handlePopOutPane` function (lines 1392-1408)
+
+#### Fixed: Terminal Stuck Reconnecting After Multi-Window Detach
+- **Root Cause**: WebSocket agents not cleaned up when terminal detached in another window
+  - Scenario: Window A has terminal connected → Window B detaches it → broadcasts state
+  - Window A receives broadcast, updates terminal status to 'detached'
+  - But WebSocket agent still exists in Window A!
+  - Terminal stuck in "reconnecting" state (has agent but status says detached)
+
+- **The Fix**: Monitor terminals becoming detached and clean up agents
+  - Added `useEffect` in `useWebSocketManager` to watch for detached terminals with agents
+  - Sends `disconnect` to backend to remove terminal from ownership map
+  - Removes agent from local `webSocketAgents` array
+  - Clears `agentId` from terminal
+  - All windows now properly sync detached state ✓
+
+- **Files Modified**:
+  - `src/hooks/useWebSocketManager.ts` - Added cleanup effect (lines 115-140)
+
+### 📝 Impact
+
+**Before**:
+- Unsplitting lost one terminal (required refresh to recover)
+- Multi-window detach left terminals stuck reconnecting
+
+**After**:
+- Both terminals remain visible after unsplit
+- Multi-window detach syncs correctly across all windows
+- No refresh needed for state synchronization
+
+---
+
 ## [1.2.4] - 2025-11-13
 
 ### ✨ Project Management UI Enhancements
