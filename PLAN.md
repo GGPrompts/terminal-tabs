@@ -2,223 +2,39 @@
 
 ## 🚨 CURRENT STATUS - READ FIRST
 
-**Status**: ✅ **CORE FUNCTIONALITY COMPLETE** + ✅ **MAJOR REFACTORING COMPLETE**
+**Status**: ✅ **PRODUCTION READY** - All Major Features Complete
 
-**Date**: November 10, 2025
-**Version**: v1.2.1 (cleanup branch)
-**Branch**: `cleanup` (refactoring complete!)
+**Date**: November 14, 2025
+**Version**: v1.3.0
+**Branch**: `master`
 
 ### What's Working 🎉
 - ✅ Terminal persistence (all tabs render after refresh)
 - ✅ Tmux integration (sessions survive refresh)
-- ✅ Session reconnection working (terminals properly reconnect to tmux sessions)
+- ✅ Multi-window support (move tabs between browser windows)
+- ✅ Split terminals (horizontal/vertical with drag-to-resize)
+- ✅ **Keyboard shortcuts** (Alt+1-9, Alt+H/V/X/Z, Alt+Arrow) - NEW!
+- ✅ **Hotkeys help sidebar** (⌨️ button in header) - NEW!
+- ✅ **State sync middleware** (no race conditions, 98.4% test pass rate) - NEW!
+- ✅ Auto-naming from tmux (tab names update from pane titles)
+- ✅ Detach/reattach working correctly
 - ✅ Per-tab customization (theme, transparency, font)
-- ✅ Beautiful logging (Consola)
-- ✅ All spawning bugs fixed
-- ✅ Conditional scrollbar (tmux vs non-tmux)
-- ✅ Tab clicking & dragging working (8px activation threshold)
-- ✅ Tab reordering (drag & drop with dnd-kit)
-- ✅ Split layout infrastructure (Phase 1 - focus tracking, state management)
-- ✅ Popout feature (move tabs to new browser windows)
-- ✅ **Code quality improvements** (-1,596 lines, better organization!)
+- ✅ Project management UI
 
-### Recently Completed (cleanup branch) 🎉
-- ✅ **Phase 1**: GenericDropdown extraction (-190 lines)
-- ✅ **Phase 2**: Constants & utilities extraction
-- ✅ **Phase 3**: Terminal.tsx hooks extraction (1,385 → 807 lines)
-- ✅ **Phase 4**: SimpleTerminalApp.tsx decomposition (2,207 → 1,147 lines)
-- ✅ **Bug Fixes**: All Phase 4 critical bugs resolved (wsRef, ResizeObserver, TypeScript)
-- ✅ **Bug Fix**: Popout window timing issue
-- ✅ **Total Impact**: -1,596 lines of code removed!
-
-### Optional Future Work
-- Phase 5: SplitLayout consolidation (optional - already working well)
-- Phase 6: Testing & documentation (optional enhancements)
-- See "Remaining Tasks" section below for UX improvements
+### Recent Completions (v1.3.0 - Nov 14, 2025) 🎉
+- ✅ Keyboard shortcuts system (12+ shortcuts, no browser conflicts)
+- ✅ Hotkeys help sidebar (always accessible reference)
+- ✅ BroadcastChannel middleware (eliminated setTimeout race conditions)
+- ✅ Fixed unsplit terminal disappearing bug
+- ✅ Fixed multi-window detach sync bug
+- ✅ Safe tmux API (prevents terminal corruption)
+- ✅ Test pass rate: 91% → 98.4%
 
 **For completed features, see [CHANGELOG.md](CHANGELOG.md)**
 
 ---
 
-## 🔥 HIGH PRIORITY: Tmux UI Controls + Keyboard Shortcuts (Nov 14, 2025)
-
-### Problem Statement
-
-**Browser keyboard conflicts make tmux unusable:**
-- `Ctrl+C` → Opens browser console (not terminal copy)
-- `Ctrl+T` → New browser tab (not tmux window)
-- `Ctrl+W` → Close browser tab (not tmux close-pane)
-- `Ctrl+B` → Tmux prefix gets eaten by browser
-- **Tab cycling hotkeys don't work** (Ctrl+Tab, Ctrl+Shift+Tab)
-
-**TUI app limitations:**
-- Can't focus non-input areas (Claude Code, htop, etc.)
-- Mouse selection doesn't work well in focused apps
-- Can't use tmux shortcuts when TUI app has focus
-
-### The Solution: UI-Based Tmux Controls
-
-**Make the web UI MORE powerful than native tmux** by providing visual controls and non-conflicting hotkeys.
-
-#### 1. Terminal Toolbar Buttons
-
-Add tmux action buttons to the terminal footer (when tmux is enabled):
-
-```jsx
-// In Terminal.tsx footer
-{terminal.sessionName && (
-  <div className="tmux-controls">
-    <button onClick={() => tmuxCommand('split-window -h')} title="Split Horizontal (Alt+H)">
-      ⬌
-    </button>
-    <button onClick={() => tmuxCommand('split-window -v')} title="Split Vertical (Alt+V)">
-      ⬍
-    </button>
-    <button onClick={() => tmuxCommand('copy-mode')} title="Copy Mode (Alt+[)">
-      📋
-    </button>
-    <button onClick={() => tmuxCommand('resize-pane -Z')} title="Zoom Toggle (Alt+Z)">
-      🔍
-    </button>
-  </div>
-)}
-```
-
-#### 2. Enhanced Context Menu (Right-Click)
-
-```jsx
-// In SimpleTerminalApp.tsx context menu
-{terminal.sessionName && (
-  <>
-    <div className="context-menu-section-label">Tmux Controls</div>
-    <div onClick={() => handleTmuxCommand('split-window -h')}>
-      ⬌ Split Horizontal
-    </div>
-    <div onClick={() => handleTmuxCommand('split-window -v')}>
-      ⬍ Split Vertical
-    </div>
-    <div onClick={() => handleTmuxCommand('copy-mode')}>
-      📋 Enter Copy Mode
-    </div>
-    <div onClick={() => handleTmuxCommand('resize-pane -Z')}>
-      🔍 Zoom Pane
-    </div>
-    <div onClick={() => handleTmuxCommand('kill-pane')}>
-      ❌ Close Pane
-    </div>
-  </>
-)}
-```
-
-#### 3. Alt-Based Keyboard Shortcuts
-
-**Use Alt instead of Ctrl to avoid browser conflicts:**
-
-```typescript
-// New file: src/hooks/useTmuxKeyboardShortcuts.ts
-const TMUX_SHORTCUTS = {
-  'Alt+h': 'split-window -h',
-  'Alt+v': 'split-window -v',
-  'Alt+x': 'kill-pane',
-  'Alt+z': 'resize-pane -Z',
-  'Alt+[': 'copy-mode',
-  'Alt+ArrowUp': 'select-pane -U',
-  'Alt+ArrowDown': 'select-pane -D',
-  'Alt+ArrowLeft': 'select-pane -L',
-  'Alt+ArrowRight': 'select-pane -R',
-}
-```
-
-#### 4. Tab Cycling Shortcuts (NEW)
-
-**Fix broken tab navigation:**
-```typescript
-// Tab navigation (avoid Ctrl+Tab which browser owns)
-const TAB_SHORTCUTS = {
-  'Alt+1': () => setActiveTerminal(terminals[0].id),
-  'Alt+2': () => setActiveTerminal(terminals[1].id),
-  // ... up to Alt+9
-  'Alt+0': () => setActiveTerminal(terminals[terminals.length - 1].id), // Last tab
-  'Alt+]': () => nextTab(), // Next tab
-  'Alt+[': () => prevTab(), // Previous tab
-}
-```
-
-#### 5. Keyboard Shortcuts Help Modal
-
-**Add "?" button in header** that shows all available shortcuts:
-
-```jsx
-// In SimpleTerminalApp.tsx header
-<button onClick={() => setShowHotkeysHelp(true)} title="Keyboard Shortcuts">
-  ⌨️ Hotkeys
-</button>
-
-// Modal content
-<HotkeysHelpModal>
-  <section>
-    <h3>Tab Navigation</h3>
-    <kbd>Alt+1-9</kbd> - Jump to tab 1-9
-    <kbd>Alt+0</kbd> - Jump to last tab
-    <kbd>Alt+]</kbd> - Next tab
-    <kbd>Alt+[</kbd> - Previous tab
-  </section>
-
-  <section>
-    <h3>Tmux Pane Controls</h3>
-    <kbd>Alt+H</kbd> - Split horizontal
-    <kbd>Alt+V</kbd> - Split vertical
-    <kbd>Alt+X</kbd> - Close pane
-    <kbd>Alt+Z</kbd> - Zoom toggle
-  </section>
-
-  <section>
-    <h3>Tmux Navigation</h3>
-    <kbd>Alt+Arrow</kbd> - Navigate panes
-  </section>
-</HotkeysHelpModal>
-```
-
-### Backend Support (Already Exists!)
-
-The backend already has `/api/tmux/sessions/:name/command`:
-
-```javascript
-// Helper function
-const sendTmuxCommand = async (sessionName: string, command: string) => {
-  const response = await fetch(`/api/tmux/sessions/${sessionName}/command`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ command })
-  })
-  return response.json()
-}
-```
-
-### Implementation Tasks
-
-- [ ] Create `src/hooks/useTmuxKeyboardShortcuts.ts`
-- [ ] Create `src/components/HotkeysHelpModal.tsx`
-- [ ] Add tmux toolbar buttons to `Terminal.tsx` footer
-- [ ] Add tmux section to context menu in `SimpleTerminalApp.tsx`
-- [ ] Add "Hotkeys" button to header
-- [ ] Fix tab cycling shortcuts (Alt+[ / Alt+])
-- [ ] Add Alt+1-9 direct tab jumping
-- [ ] Test all shortcuts don't conflict with browser
-
-### Benefits
-
-✅ **No browser conflicts** - Alt-based shortcuts avoid all browser hotkeys
-✅ **Visual discoverability** - Users can see available commands via buttons
-✅ **Works with focused TUI apps** - Buttons work even when terminal has focus
-✅ **Better than native tmux** - More intuitive than remembering `Ctrl+B` prefix
-✅ **Keyboard shortcuts help** - Built-in documentation via modal
-
-**Estimated Time:** 3-4 hours
-
----
-
-## 🎯 NEXT UP: UX Improvements & Quality of Life
+## 🎯 Future Work (Optional)
 
 **Priority:** Medium (Nice-to-have enhancements)
 **Estimated Time:** 6-8 hours total
