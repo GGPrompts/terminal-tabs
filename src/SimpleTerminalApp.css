@@ -1171,9 +1171,9 @@
 
 .terminal-display > * {
   width: 100%;
-  /* Use calc to fill remaining space after header padding */
-  height: calc(100% - var(--terminal-header-offset));
-  flex: 1;
+  /* Flex: 1 makes it fill the remaining space in the flex container */
+  /* Padding-top on parent already accounts for header space */
+  height: 100%;
 }
 
 /* Remove padding when header is hidden so terminals reclaim the space */
@@ -1185,10 +1185,10 @@
 /* Terminal Wrapper - for keeping all terminals rendered */
 .terminal-wrapper {
   position: absolute;
-  top: var(--terminal-header-offset, 0px);
+  top: 0;
   left: 0;
   width: 100%;
-  height: calc(100% - var(--terminal-header-offset, 0px));
+  height: 100%;
   /* Hidden terminals still render but are invisible */
 }
 
