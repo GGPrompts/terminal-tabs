@@ -378,6 +378,8 @@ function SimpleTerminalApp() {
   const [spawnSearchText, setSpawnSearchText] = useState('')
   const [spawnWorkingDirOverride, setSpawnWorkingDirOverride] = useState('')
   const [selectedSpawnOptions, setSelectedSpawnOptions] = useState<Set<number>>(new Set())
+  const [projects, setProjects] = useState<Array<{ name: string; workingDir: string }>>([])
+  const [selectedProject, setSelectedProject] = useState('')
 
   const terminalRef = useRef<any>(null)
   const wsRef = useRef<WebSocket | null>(null) // Needed by both spawning and WebSocket hooks
@@ -627,6 +629,12 @@ function SimpleTerminalApp() {
           console.log('[SimpleTerminalApp] ✅ Spawn options loaded:', data.spawnOptions.length, 'options')
           setSpawnOptions(data.spawnOptions)
           spawnOptionsRef.current = data.spawnOptions // Update ref immediately
+        }
+
+        // Load projects from file
+        if (data.projects) {
+          console.log('[SimpleTerminalApp] ✅ Projects loaded:', data.projects.length, 'projects')
+          setProjects(data.projects)
         }
 
         // Load global defaults from file and apply to settings store
@@ -1980,6 +1988,7 @@ End of error report
               setSpawnSearchText('')
               setSpawnWorkingDirOverride('')
               setSelectedSpawnOptions(new Set())
+              setSelectedProject('')
             }}>✕</button>
           </div>
 
@@ -1988,17 +1997,54 @@ End of error report
             <label className="spawn-workingdir-label">
               📁 Working Directory (optional override)
             </label>
+
+            {/* Project dropdown - only show if projects exist */}
+            {projects.length > 0 && (
+              <select
+                className="spawn-project-dropdown"
+                value={selectedProject}
+                onChange={(e) => {
+                  const projectName = e.target.value
+                  setSelectedProject(projectName)
+
+                  if (projectName === '') {
+                    // Manual entry - clear override to revert to defaults
+                    setSpawnWorkingDirOverride('')
+                  } else {
+                    // Find project and set working directory
+                    const project = projects.find(p => p.name === projectName)
+                    if (project) {
+                      setSpawnWorkingDirOverride(project.workingDir)
+                    }
+                  }
+                }}
+              >
+                <option value="">Manual Entry</option>
+                {projects.map((project) => (
+                  <option key={project.name} value={project.name}>
+                    {project.name}
+                  </option>
+                ))}
+              </select>
+            )}
+
             <input
               type="text"
               className="spawn-workingdir-input"
-              placeholder="Leave empty to use defaults..."
+              placeholder={useSettingsStore.getState().workingDirectory || '~'}
               value={spawnWorkingDirOverride}
-              onChange={(e) => setSpawnWorkingDirOverride(e.target.value)}
+              onChange={(e) => {
+                setSpawnWorkingDirOverride(e.target.value)
+                setSelectedProject('') // Switch to manual entry if user types
+              }}
             />
             {spawnWorkingDirOverride && (
               <button
                 className="spawn-workingdir-clear"
-                onClick={() => setSpawnWorkingDirOverride('')}
+                onClick={() => {
+                  setSpawnWorkingDirOverride('')
+                  setSelectedProject('')
+                }}
                 title="Clear override"
               >
                 ✕
@@ -2076,11 +2122,15 @@ End of error report
               const isSelected = selectedSpawnOptions.has(originalIdx)
 
               // Calculate effective working directory (3-tier priority)
+              // CRITICAL: Override only applies to spawn options WITHOUT custom workingDir
               const globalWorkingDir = useSettingsStore.getState().workingDirectory || '~'
-              const effectiveWorkingDir = spawnWorkingDirOverride || option.workingDir || globalWorkingDir
-              const isOverride = !!spawnWorkingDirOverride
-              const isCustom = !spawnWorkingDirOverride && !!option.workingDir
-              const isDefault = !spawnWorkingDirOverride && !option.workingDir
+              const hasCustomWorkingDir = !!option.workingDir
+              const effectiveWorkingDir = hasCustomWorkingDir
+                ? option.workingDir // Custom path in spawn-options.json (highest priority, ignore override)
+                : (spawnWorkingDirOverride || globalWorkingDir) // Use override or global default
+              const isOverride = !hasCustomWorkingDir && !!spawnWorkingDirOverride
+              const isCustom = hasCustomWorkingDir
+              const isDefault = !hasCustomWorkingDir && !spawnWorkingDirOverride
 
               return (
                 <div

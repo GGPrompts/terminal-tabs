@@ -848,6 +848,31 @@
   font-weight: 500;
 }
 
+.spawn-project-dropdown {
+  width: 100%;
+  padding: 8px 12px;
+  margin-bottom: 8px;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+  color: #fff;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.spawn-project-dropdown:focus {
+  outline: none;
+  border-color: rgba(59, 130, 246, 0.5);
+  background: rgba(0, 0, 0, 0.4);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.spawn-project-dropdown option {
+  background: #1a1a1a;
+  color: #fff;
+}
+
 .spawn-workingdir-input {
   width: 100%;
   padding: 8px 32px 8px 12px;
@@ -875,7 +900,7 @@
 .spawn-workingdir-clear {
   position: absolute;
   right: 24px;
-  top: 41px;
+  bottom: 20px;
   background: rgba(239, 68, 68, 0.2);
   border: 1px solid rgba(239, 68, 68, 0.4);
   color: #ef4444;

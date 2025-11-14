@@ -52,6 +52,8 @@ export function SettingsModal({ isOpen, onClose, onSave }: SettingsModalProps) {
   const [spawnOptions, setSpawnOptions] = useState<SpawnOption[]>([])
   const [originalOptions, setOriginalOptions] = useState<SpawnOption[]>([]) // Track original state
   const [projects, setProjects] = useState<Project[]>([])
+  const [originalProjects, setOriginalProjects] = useState<Project[]>([]) // Track original projects
+  const [originalGlobalDefaults, setOriginalGlobalDefaults] = useState<any>(null) // Track original global defaults
   const [selectedProject, setSelectedProject] = useState<string>('') // Empty = manual entry
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
@@ -61,6 +63,9 @@ export function SettingsModal({ isOpen, onClose, onSave }: SettingsModalProps) {
   const [showIconPicker, setShowIconPicker] = useState(false)
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null)
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null)
+  const [isAddingProject, setIsAddingProject] = useState(false)
+  const [editingProjectIndex, setEditingProjectIndex] = useState<number | null>(null)
+  const [projectFormData, setProjectFormData] = useState<Project>({ name: '', workingDir: '' })
 
   // Global settings
   const settings = useSettingsStore()
@@ -120,11 +125,13 @@ export function SettingsModal({ isOpen, onClose, onSave }: SettingsModalProps) {
         // Load projects from file
         if (result.projects) {
           setProjects(result.projects)
+          setOriginalProjects(JSON.parse(JSON.stringify(result.projects))) // Deep copy for comparison
         }
 
         // Load global defaults from file and apply to settings store
         if (result.globalDefaults) {
           const defaults = result.globalDefaults
+          setOriginalGlobalDefaults(JSON.parse(JSON.stringify(defaults))) // Track original
           settings.updateSettings({
             workingDirectory: defaults.workingDirectory ?? settings.workingDirectory,
             terminalDefaultFontFamily: defaults.fontFamily ?? settings.terminalDefaultFontFamily,
@@ -147,7 +154,33 @@ export function SettingsModal({ isOpen, onClose, onSave }: SettingsModalProps) {
 
   // Check if there are unsaved changes
   const hasUnsavedChanges = () => {
-    return JSON.stringify(spawnOptions) !== JSON.stringify(originalOptions)
+    // Check spawn options
+    if (JSON.stringify(spawnOptions) !== JSON.stringify(originalOptions)) {
+      return true
+    }
+
+    // Check projects
+    if (JSON.stringify(projects) !== JSON.stringify(originalProjects)) {
+      return true
+    }
+
+    // Check global defaults
+    if (originalGlobalDefaults) {
+      const currentGlobalDefaults = {
+        workingDirectory: settings.workingDirectory,
+        fontFamily: settings.terminalDefaultFontFamily,
+        fontSize: settings.terminalDefaultFontSize,
+        theme: settings.terminalDefaultTheme,
+        background: settings.terminalDefaultBackground,
+        transparency: Math.round(settings.terminalDefaultTransparency * 100),
+        useTmux: settings.useTmux,
+      }
+      if (JSON.stringify(currentGlobalDefaults) !== JSON.stringify(originalGlobalDefaults)) {
+        return true
+      }
+    }
+
+    return false
   }
 
   // Handle close with unsaved changes warning
@@ -194,10 +227,14 @@ export function SettingsModal({ isOpen, onClose, onSave }: SettingsModalProps) {
       const response = await fetch('/api/spawn-options', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ spawnOptions, globalDefaults }),
+        body: JSON.stringify({ spawnOptions, globalDefaults, projects }),
       })
       const result = await response.json()
       if (result.success) {
+        // Update original state to reflect saved changes
+        setOriginalOptions(JSON.parse(JSON.stringify(spawnOptions)))
+        setOriginalProjects(JSON.parse(JSON.stringify(projects)))
+        setOriginalGlobalDefaults(JSON.parse(JSON.stringify(globalDefaults)))
         onSave()
         onClose()
       } else {
@@ -320,6 +357,46 @@ export function SettingsModal({ isOpen, onClose, onSave }: SettingsModalProps) {
     setShowIconPicker(false)
   }
 
+  // Project management functions
+  const handleAddProject = () => {
+    if (!projectFormData.name || !projectFormData.workingDir) {
+      alert('Project name and working directory are required')
+      return
+    }
+    setProjects([...projects, projectFormData])
+    resetProjectForm()
+  }
+
+  const handleUpdateProject = () => {
+    if (editingProjectIndex === null) return
+    if (!projectFormData.name || !projectFormData.workingDir) {
+      alert('Project name and working directory are required')
+      return
+    }
+    const updated = [...projects]
+    updated[editingProjectIndex] = projectFormData
+    setProjects(updated)
+    resetProjectForm()
+  }
+
+  const handleEditProject = (index: number) => {
+    setProjectFormData(projects[index])
+    setEditingProjectIndex(index)
+    setIsAddingProject(true)
+  }
+
+  const handleDeleteProject = (index: number) => {
+    if (confirm('Delete this project?')) {
+      setProjects(projects.filter((_, i) => i !== index))
+    }
+  }
+
+  const resetProjectForm = () => {
+    setProjectFormData({ name: '', workingDir: '' })
+    setIsAddingProject(false)
+    setEditingProjectIndex(null)
+  }
+
   // Drag and drop handlers
   const handleDragStart = (e: React.DragEvent, index: number) => {
     setDraggedIndex(index)
@@ -435,6 +512,93 @@ export function SettingsModal({ isOpen, onClose, onSave }: SettingsModalProps) {
                 </div>
               </div>
 
+              {/* Project Management Section */}
+              <div className="settings-section">
+                <h3>📋 Project Management</h3>
+                <p className="setting-description">Add and manage project shortcuts for quick directory switching</p>
+
+                {!isAddingProject ? (
+                  <>
+                    <div className="options-list-header" style={{ marginTop: '1rem' }}>
+                      <span>{projects.length} project{projects.length !== 1 ? 's' : ''}</span>
+                      <button className="add-btn" onClick={() => setIsAddingProject(true)}>
+                        + Add Project
+                      </button>
+                    </div>
+
+                    {projects.length > 0 && (
+                      <div className="projects-list" style={{ marginTop: '0.5rem' }}>
+                        {projects.map((project, index) => (
+                          <div key={index} className="option-item">
+                            <div className="option-main">
+                              <span className="option-icon">📁</span>
+                              <div className="option-details">
+                                <div className="option-label">{project.name}</div>
+                                <div className="option-meta">{project.workingDir}</div>
+                              </div>
+                            </div>
+                            <div className="option-actions">
+                              <button
+                                className="edit-btn"
+                                onClick={() => handleEditProject(index)}
+                                title="Edit"
+                              >
+                                ✏️
+                              </button>
+                              <button
+                                className="delete-btn"
+                                onClick={() => handleDeleteProject(index)}
+                                title="Delete"
+                              >
+                                🗑️
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <div className="project-form" style={{ marginTop: '1rem', padding: '1rem', background: 'rgba(0,0,0,0.2)', borderRadius: '8px' }}>
+                    <h4>{editingProjectIndex !== null ? 'Edit Project' : 'New Project'}</h4>
+
+                    <label style={{ display: 'block', marginTop: '1rem' }}>
+                      Project Name *
+                      <input
+                        type="text"
+                        value={projectFormData.name}
+                        onChange={(e) => setProjectFormData({ ...projectFormData, name: e.target.value })}
+                        placeholder="e.g., Tabz Development"
+                        style={{ width: '100%', marginTop: '0.25rem' }}
+                      />
+                    </label>
+
+                    <label style={{ display: 'block', marginTop: '1rem' }}>
+                      Working Directory *
+                      <input
+                        type="text"
+                        value={projectFormData.workingDir}
+                        onChange={(e) => setProjectFormData({ ...projectFormData, workingDir: e.target.value })}
+                        placeholder="e.g., ~/projects/terminal-tabs"
+                        style={{ width: '100%', marginTop: '0.25rem' }}
+                      />
+                    </label>
+
+                    <div className="form-actions" style={{ marginTop: '1rem', display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
+                      <button className="cancel-btn" onClick={resetProjectForm}>
+                        Cancel
+                      </button>
+                      <button
+                        className="save-btn"
+                        onClick={editingProjectIndex !== null ? handleUpdateProject : handleAddProject}
+                      >
+                        {editingProjectIndex !== null ? 'Update' : 'Add'}
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+
               <div className="settings-section">
                 <h3>🔤 Default Font Family</h3>
                 <p className="setting-description">Used when spawn options don't specify a font</p>
@@ -533,6 +697,19 @@ export function SettingsModal({ isOpen, onClose, onSave }: SettingsModalProps) {
                   <li><strong>Spawn option defaults</strong> (Spawn Options tab)</li>
                   <li><strong>Global defaults</strong> (this tab) - lowest priority</li>
                 </ol>
+              </div>
+
+              <div className="settings-footer">
+                <button className="cancel-btn" onClick={handleClose}>
+                  Cancel
+                </button>
+                <button
+                  className="save-btn"
+                  onClick={saveSpawnOptions}
+                  disabled={isSaving}
+                >
+                  {isSaving ? 'Saving...' : 'Save Changes'}
+                </button>
               </div>
             </div>
           ) : isLoading ? (

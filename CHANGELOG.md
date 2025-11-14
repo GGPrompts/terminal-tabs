@@ -7,6 +7,94 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.2.4] - 2025-11-13
+
+### ✨ Project Management UI Enhancements
+
+#### Full Project CRUD Operations in Settings Modal
+- **Added complete project management** - Add, edit, delete projects directly in the UI
+  - New "📋 Project Management" section in Global Defaults tab
+  - Add new projects with name and working directory
+  - Edit existing projects inline with cancel/save buttons
+  - Delete projects with confirmation dialog
+  - Project list shows all configured projects with 📁 icon
+  - Modified: `src/components/SettingsModal.tsx` (added project form, CRUD handlers)
+
+#### Save Button on Global Defaults Tab
+- **Added Save Changes button** - No more navigating between tabs to save
+  - Save and Cancel buttons now appear at bottom of Global Defaults tab
+  - Matches UX of Spawn Options tab
+  - Modified: `src/components/SettingsModal.tsx`
+
+#### Enhanced Unsaved Changes Detection
+- **Tracks all changes across tabs** - Prevents accidental data loss
+  - Now detects changes to spawn options, projects, AND global defaults
+  - Warning dialog appears when closing modal with unsaved changes
+  - Compares current state vs. original loaded state
+  - Modified: `src/components/SettingsModal.tsx` (lines 155-184)
+
+#### Projects Dropdown in Spawn Terminal UI
+- **Added project selector to spawn menu** - Quick project switching when spawning
+  - Dropdown appears above working directory input (only if projects exist)
+  - Selecting project auto-fills working directory path
+  - Manual typing switches back to "Manual Entry" mode
+  - Clean integration with existing spawn UI
+  - Modified: `src/SimpleTerminalApp.tsx`, `src/SimpleTerminalApp.css`
+
+#### Smart Working Directory Placeholder
+- **Shows actual global default** - No more generic "Leave empty..." text
+  - Placeholder displays current global default (e.g., `/home/matt/projects/terminal-tabs`)
+  - Users see exactly what will be used if they leave it empty
+  - Modified: `src/SimpleTerminalApp.tsx` (line 2034)
+
+### 🐛 Bug Fixes
+
+#### Working Directory Filter Logic (Critical Fix)
+- **Fixed spawn menu override applying to ALL options** - Now only applies to options without custom paths
+  - **Before (broken)**: Override replaced working directory for ALL spawn options, even those with explicit `workingDir` in spawn-options.json
+  - **After (fixed)**: Override only applies to options WITHOUT custom `workingDir` (e.g., Bash, Claude Code)
+  - **Priority**: Custom `workingDir` → Spawn menu override → Global default
+  - Example: "Dev Logs" with `workingDir: ~/projects/terminal-tabs` ignores spawn menu override
+  - Modified: `src/SimpleTerminalApp.tsx` (lines 2125-2133)
+
+#### Backend Projects Persistence
+- **Projects now save correctly** - Backend accepts and persists projects array
+  - PUT `/api/spawn-options` now accepts optional `projects` parameter
+  - Falls back to existing projects if not provided (backward compatible)
+  - Writes all three sections to spawn-options.json atomically
+  - Modified: `backend/routes/api.js` (line 186)
+
+#### Dynamic Tab Names for Bash/TUI Terminals
+- **Tab names now update based on running command** - No more static "bash" tabs!
+  - **Before**: Bash terminal stays named "bash" even when running lazygit, htop, vim, etc.
+  - **After**: Tab name updates to match the running TUI application
+  - Backend now queries both `#{window_name}` and `#{pane_title}` from tmux
+  - Smart selection logic prefers window_name when it differs from pane_title
+  - Examples:
+    - Bash running lazygit → Tab shows "lazygit" ✅
+    - Bash running htop → Tab shows "htop" ✅
+    - Bash running vim → Tab shows "vim" ✅
+    - Claude Code working → Still shows "Editing: file.tsx" (uses pane_title) ✅
+  - Updates every 2 seconds via existing auto-naming system
+  - Modified: `backend/routes/api.js` (lines 802-830)
+
+#### Current Working Directory in Tmux Status Bar
+- **Status bar shows current directory** - Always know where you are, even in TUI apps
+  - **Before**: Status bar showed only session name, time, and date
+  - **After**: Status bar displays current working directory with 📁 icon
+  - Updates automatically as you `cd` around (uses `#{pane_current_path}`)
+  - Helpful for TUI apps where PWD isn't obvious (lazygit, htop, vim, etc.)
+  - Example: `[tt-bash-20] | 📁 /home/matt/projects/terminal-tabs | 14:23 13-Nov-25`
+  - Modified: `.tmux-terminal-tabs.conf` (lines 63-66)
+
+### 🎨 UI/UX Improvements
+- Styled project dropdown to match spawn menu aesthetic (dark theme with blue focus)
+- Adjusted clear button position to accommodate project dropdown
+- Project form uses inline editing pattern (consistent with spawn options)
+- Tab names now dynamically reflect running TUI applications in bash terminals
+
+---
+
 ## [1.2.3] - 2025-11-13
 
 ### ✅ Test Suite & Configuration Improvements

@@ -159,7 +159,7 @@ router.put('/spawn-options', asyncHandler(async (req, res) => {
   const path = require('path');
 
   try {
-    const { spawnOptions, globalDefaults } = req.body;
+    const { spawnOptions, globalDefaults, projects } = req.body;
 
     if (!Array.isArray(spawnOptions)) {
       return res.status(400).json({
@@ -183,7 +183,7 @@ router.put('/spawn-options', asyncHandler(async (req, res) => {
     }
 
     const configData = {
-      projects: existingProjects, // Always preserve projects (not editable via this endpoint)
+      projects: Array.isArray(projects) ? projects : existingProjects, // Use provided projects or preserve existing
       globalDefaults: globalDefaults || existingGlobalDefaults,
       spawnOptions
     };
@@ -799,21 +799,41 @@ router.get('/tmux/info/:name', asyncHandler(async (req, res) => {
       });
     }
 
-    // Get pane title, window count, and pane count in one call
-    // Format: "pane_title|window_count|active_window_index|pane_count"
+    // Get window name, pane title, window count, and pane count in one call
+    // Format: "window_name|pane_title|window_count|active_window_index|pane_count"
     const info = execSync(
-      `tmux display-message -t "${name}" -p "#{pane_title}|#{session_windows}|#{window_index}|#{window_panes}"`,
+      `tmux display-message -t "${name}" -p "#{window_name}|#{pane_title}|#{session_windows}|#{window_index}|#{window_panes}"`,
       { encoding: 'utf-8' }
     ).trim();
 
-    const [paneTitle, windowCountStr, activeWindowStr, paneCountStr] = info.split('|');
+    const [windowName, paneTitle, windowCountStr, activeWindowStr, paneCountStr] = info.split('|');
     const windowCount = parseInt(windowCountStr, 10);
     const activeWindow = parseInt(activeWindowStr, 10);
     const paneCount = parseInt(paneCountStr, 10);
 
+    // Prefer window_name when it differs from pane_title and is not generic
+    // This makes tab names update dynamically for bash terminals running TUI apps
+    // Examples:
+    //   - Bash running lazygit: window_name="lazygit", pane_title="bash" → use "lazygit"
+    //   - Claude Code: window_name="bash", pane_title="Editing: file.tsx" → use pane_title
+    //   - Plain bash: window_name="bash", pane_title="bash" → use "bash"
+
+    // Check if pane_title looks like a hostname (MattDesktop, Matt-Desktop, localhost, ip-xxx)
+    const hostnamePattern = /^(localhost|[\w]+-?(desktop|laptop)|ip-[\d-]+)$/i
+    const paneTitleIsHostname = hostnamePattern.test(paneTitle)
+
+    // Prefer window_name if:
+    // 1. pane_title is a hostname (MattDesktop) - use window_name even if it's "bash"
+    // 2. window_name differs from pane_title and isn't "bash"
+    const useWindowName = windowName && (
+      paneTitleIsHostname ||
+      (windowName !== paneTitle && windowName !== 'bash')
+    )
+    const displayName = useWindowName ? windowName : (paneTitle || 'bash')
+
     res.json({
       success: true,
-      paneTitle: paneTitle || 'bash',
+      paneTitle: displayName, // Return as paneTitle for backward compatibility
       windowCount: windowCount || 1,
       activeWindow: activeWindow || 0,
       paneCount: paneCount || 1,

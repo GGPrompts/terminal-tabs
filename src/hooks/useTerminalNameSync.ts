@@ -37,16 +37,14 @@ export function useTerminalNameSync(
             if (result.success) {
               let newName = result.paneTitle || terminal.name
 
-              // Check if pane title is generic (hostname, shell name, session name, or single word)
-              // Claude Code sets useful titles like "Editing: file.ts", others typically show hostname
+              // Check if pane title is generic (hostname or common shell names)
+              // We want to KEEP names like "tfe", "lazygit", "htop", "vim" - these are useful!
               const isGenericTitle =
-                // Common shell names
+                // Common shell names only (not TUI app names!)
                 ['bash', 'zsh', 'sh', 'fish', 'ksh', 'tcsh'].includes(newName.toLowerCase()) ||
                 // Session name itself (e.g., 'tt-bash-abc')
                 newName === terminal.sessionName ||
-                // Single word with no spaces or special chars (likely hostname)
-                !/[\s\-:\/]/.test(newName) ||
-                // Starts with common hostname patterns
+                // Hostname patterns (MattDesktop, localhost, ip-xxx)
                 /^(localhost|[\w]+-desktop|[\w]+-laptop|ip-[\d-]+)$/i.test(newName)
 
               // For generic titles on non-Claude Code terminals, use spawn label
