@@ -58,6 +58,7 @@ export function useKeyboardShortcuts(
       // Alt+T - Spawn first option (default)
       if (e.altKey && e.key === 't') {
         e.preventDefault()
+        e.stopPropagation()
         if (spawnOptions.length > 0) {
           handleSpawnTerminal(spawnOptions[0])
         } else {
@@ -69,6 +70,7 @@ export function useKeyboardShortcuts(
       // Alt+W - Close active tab
       if (e.altKey && e.key === 'w') {
         e.preventDefault()
+        e.stopPropagation()
         if (activeTerminalId) {
           const terminal = visibleTerminals.find(t => t.id === activeTerminalId)
           if (terminal) {
@@ -86,6 +88,7 @@ export function useKeyboardShortcuts(
       // Alt+Tab - Next tab
       if (e.altKey && e.key === 'Tab' && !e.shiftKey) {
         e.preventDefault()
+        e.stopPropagation()
         if (visibleTerminals.length > 0) {
           const currentIndex = visibleTerminals.findIndex(t => t.id === activeTerminalId)
           const nextIndex = (currentIndex + 1) % visibleTerminals.length
@@ -97,6 +100,7 @@ export function useKeyboardShortcuts(
       // Alt+Shift+Tab - Previous tab
       if (e.altKey && e.shiftKey && e.key === 'Tab') {
         e.preventDefault()
+        e.stopPropagation()
         if (visibleTerminals.length > 0) {
           const currentIndex = visibleTerminals.findIndex(t => t.id === activeTerminalId)
           const prevIndex = currentIndex <= 0 ? visibleTerminals.length - 1 : currentIndex - 1
@@ -108,6 +112,7 @@ export function useKeyboardShortcuts(
       // Ctrl+Shift+T - Reopen last closed tab (matches browser "reopen closed tab" behavior)
       if (e.ctrlKey && e.shiftKey && e.key === 'T') {
         e.preventDefault()
+        e.stopPropagation()
         if (lastClosedTerminalRef.current) {
           const option = spawnOptions.find(
             opt => opt.terminalType === lastClosedTerminalRef.current!.terminalType
@@ -122,6 +127,7 @@ export function useKeyboardShortcuts(
       // Alt+1-9 - Jump to tab N
       if (e.altKey && e.key >= '1' && e.key <= '9') {
         e.preventDefault()
+        e.stopPropagation()
         const tabIndex = parseInt(e.key) - 1
         if (tabIndex < visibleTerminals.length) {
           setActiveTerminal(visibleTerminals[tabIndex].id)
@@ -132,6 +138,7 @@ export function useKeyboardShortcuts(
       // Alt+0 - Jump to last tab
       if (e.altKey && e.key === '0') {
         e.preventDefault()
+        e.stopPropagation()
         if (visibleTerminals.length > 0) {
           setActiveTerminal(visibleTerminals[visibleTerminals.length - 1].id)
         }
@@ -141,6 +148,7 @@ export function useKeyboardShortcuts(
       // Alt+] - Next tab (alternative to Alt+Tab)
       if (e.altKey && e.key === ']' && !e.shiftKey && !e.ctrlKey) {
         e.preventDefault()
+        e.stopPropagation()
         if (visibleTerminals.length > 0) {
           const currentIndex = visibleTerminals.findIndex(t => t.id === activeTerminalId)
           const nextIndex = (currentIndex + 1) % visibleTerminals.length
@@ -152,6 +160,7 @@ export function useKeyboardShortcuts(
       // Alt+[ - Previous tab (alternative to Alt+Shift+Tab)
       if (e.altKey && e.key === '[' && !e.shiftKey && !e.ctrlKey) {
         e.preventDefault()
+        e.stopPropagation()
         if (visibleTerminals.length > 0) {
           const currentIndex = visibleTerminals.findIndex(t => t.id === activeTerminalId)
           const prevIndex = currentIndex <= 0 ? visibleTerminals.length - 1 : currentIndex - 1
@@ -165,8 +174,10 @@ export function useKeyboardShortcuts(
         const activeTerminal = visibleTerminals.find(t => t.id === activeTerminalId)
         if (activeTerminal?.sessionName) {
           const tmuxCommands: Record<string, string> = {
-            'v': 'split-window -v',
-            'V': 'split-window -v',
+            'h': 'split-window -h -c "#{pane_current_path}"',
+            'H': 'split-window -h -c "#{pane_current_path}"',
+            'v': 'split-window -v -c "#{pane_current_path}"',
+            'V': 'split-window -v -c "#{pane_current_path}"',
             'x': 'kill-pane',
             'X': 'kill-pane',
             'z': 'resize-pane -Z',
@@ -180,6 +191,7 @@ export function useKeyboardShortcuts(
           const command = tmuxCommands[e.key]
           if (command && e.altKey && !e.ctrlKey && !e.metaKey) {
             e.preventDefault()
+            e.stopPropagation()
             sendTmuxCommand(activeTerminal.sessionName, command)
             return
           }
