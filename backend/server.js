@@ -40,6 +40,7 @@ app.use(express.json());
 // API Routes
 app.use('/api', apiRouter);
 app.use('/api/files', filesRouter);
+app.use('/api/ai', require('./routes/ai')); // AI-powered features (experimental)
 // app.use('/api/workspace', workspaceRouter); // Archived - workspace-manager removed
 
 // TUI Tools endpoints

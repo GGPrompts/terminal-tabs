@@ -885,6 +885,101 @@ router.get('/tmux/info/:name', asyncHandler(async (req, res) => {
 }));
 
 /**
+ * GET /api/tmux/context/:name - Get terminal context for AI suggestions
+ * Returns current directory, recent commands, git status, etc.
+ */
+router.get('/tmux/context/:name', asyncHandler(async (req, res) => {
+  const { name } = req.params;
+  const { execSync } = require('child_process');
+  const fs = require('fs');
+  const path = require('path');
+
+  try {
+    // Check if session exists
+    try {
+      execSync(`tmux has-session -t "${name}" 2>/dev/null`);
+    } catch {
+      return res.status(404).json({
+        success: false,
+        error: `Session ${name} not found`
+      });
+    }
+
+    // Get current working directory
+    const cwd = execSync(
+      `tmux display-message -t "${name}" -p "#{pane_current_path}"`,
+      { encoding: 'utf-8' }
+    ).trim();
+
+    // Get recent commands from tmux history (last 10 commands)
+    const history = execSync(
+      `tmux capture-pane -t "${name}" -p -S -100`,
+      { encoding: 'utf-8' }
+    );
+
+    // Extract commands (lines starting with $ or > prompt)
+    const recentCommands = history
+      .split('\n')
+      .filter(line => /^[\$>]\s/.test(line))
+      .map(line => line.replace(/^[\$>]\s/, '').trim())
+      .filter(cmd => cmd.length > 0)
+      .slice(-10);
+
+    // Check if it's a git repository
+    let gitRepo = false;
+    let gitStatus = null;
+    try {
+      execSync(`git -C "${cwd}" rev-parse --git-dir 2>/dev/null`);
+      gitRepo = true;
+
+      // Get git status summary
+      const status = execSync(`git -C "${cwd}" status --short`, { encoding: 'utf-8' }).trim();
+      if (status) {
+        const lines = status.split('\n');
+        gitStatus = `${lines.length} file${lines.length !== 1 ? 's' : ''} changed`;
+      } else {
+        gitStatus = 'clean';
+      }
+    } catch {
+      // Not a git repo or git not installed
+    }
+
+    // List files in current directory (limit to 50)
+    let files = [];
+    try {
+      if (fs.existsSync(cwd)) {
+        files = fs.readdirSync(cwd).slice(0, 50);
+      }
+    } catch {
+      // Can't read directory
+    }
+
+    // Get last command from history
+    const lastCommand = recentCommands.length > 0 ? recentCommands[recentCommands.length - 1] : null;
+
+    // Shorten path for display (replace home directory with ~)
+    const homeDir = require('os').homedir();
+    const displayCwd = cwd ? cwd.replace(homeDir, '~') : '~';
+
+    res.json({
+      success: true,
+      cwd: displayCwd,
+      recentCommands,
+      gitRepo,
+      gitStatus,
+      files,
+      lastCommand
+    });
+  } catch (err) {
+    console.error(`[API] Failed to get context for ${name}:`, err.message);
+    res.status(500).json({
+      success: false,
+      error: err.message
+    });
+  }
+}));
+
+/**
  * GET /api/claude-status?dir=<path>&sessionName=<name> - Get Claude Code status from state-tracker file
  * Returns status (idle, working, tool_use, awaiting_input) for a specific terminal
  *
