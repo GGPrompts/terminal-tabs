@@ -253,9 +253,16 @@ class TerminalRegistry extends EventEmitter {
       rows: config.rows || 30
     };
 
+    // CRITICAL: If resumable terminal, enable tmux automatically
+    if (config.resumable) {
+      terminalConfig.useTmux = true;
+      terminalConfig.sessionName = config.sessionName || name;
+      console.log(`[TerminalRegistry] Resumable terminal detected - enabling tmux with session: ${terminalConfig.sessionName}`);
+    }
+
     // Debug terminal type
     console.log(`[TerminalRegistry] Registering terminal with type: '${terminalConfig.terminalType}' (config.terminalType: '${config.terminalType}')`);
-    
+
     // Guard against incorrect start commands for certain types
     // For gemini, ensure we don't accidentally start an interactive bash instead of the CLI
     if (terminalConfig.terminalType === 'gemini') {

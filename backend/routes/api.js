@@ -714,6 +714,88 @@ router.delete('/tmux/sessions/:name', asyncHandler(async (req, res) => {
 }));
 
 /**
+ * POST /api/tmux/spawn - Create a new tmux session
+ * Body: { sessionName: string, terminalType: string, workingDir?: string, command?: string }
+ */
+router.post('/tmux/spawn', asyncHandler(async (req, res) => {
+  const { sessionName, terminalType, workingDir, command } = req.body;
+  const { execSync } = require('child_process');
+  const path = require('path');
+  const fs = require('fs');
+
+  if (!sessionName || !terminalType) {
+    return res.status(400).json({
+      success: false,
+      error: 'sessionName and terminalType are required'
+    });
+  }
+
+  try {
+    // Load spawn options to get command for this terminal type
+    const spawnOptionsPath = path.join(__dirname, '../../public/spawn-options.json');
+    let spawnCommand = command;
+    let sessionWorkingDir = workingDir;
+
+    if (fs.existsSync(spawnOptionsPath)) {
+      const spawnOptions = JSON.parse(fs.readFileSync(spawnOptionsPath, 'utf8'));
+      const template = spawnOptions.spawnOptions?.find(t => t.terminalType === terminalType);
+
+      if (template) {
+        spawnCommand = spawnCommand || template.command || '';
+        sessionWorkingDir = sessionWorkingDir || template.workingDir || spawnOptions.globalDefaults?.workingDirectory;
+      }
+    }
+
+    // Default to user's home directory if not specified
+    sessionWorkingDir = sessionWorkingDir || process.env.HOME || '/home/matt';
+
+    // Expand ~ to home directory
+    if (sessionWorkingDir.startsWith('~')) {
+      sessionWorkingDir = sessionWorkingDir.replace('~', process.env.HOME || '/home/matt');
+    }
+
+    // Check if session already exists
+    try {
+      execSync(`tmux has-session -t "${sessionName}" 2>/dev/null`);
+      return res.status(409).json({
+        success: false,
+        error: `Session ${sessionName} already exists`
+      });
+    } catch {
+      // Session doesn't exist, good to create
+    }
+
+    // Create tmux session
+    let createCommand;
+    if (spawnCommand) {
+      // Create session with specific command
+      createCommand = `tmux new-session -d -s "${sessionName}" -c "${sessionWorkingDir}" "${spawnCommand}"`;
+    } else {
+      // Create session with default shell
+      createCommand = `tmux new-session -d -s "${sessionName}" -c "${sessionWorkingDir}"`;
+    }
+
+    execSync(createCommand);
+
+    res.json({
+      success: true,
+      message: `Session ${sessionName} created`,
+      data: {
+        sessionName,
+        terminalType,
+        workingDir: sessionWorkingDir,
+        command: spawnCommand
+      }
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+}));
+
+/**
  * POST /api/tmux/detach/:name - Detach from a tmux session (keep session alive)
  * Used when moving terminals between browser windows
  */

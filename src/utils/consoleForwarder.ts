@@ -3,7 +3,7 @@
  * Optimized for Claude Code debugging via tmux capture-pane
  */
 
-const BACKEND_URL = 'http://localhost:8127';
+const BACKEND_URL = 'http://localhost:8131';
 let logBuffer: Array<{ level: string; message: string; timestamp: number; source?: string }> = [];
 let flushTimer: NodeJS.Timeout | null = null;
 

@@ -326,6 +326,97 @@ wss.on('connection', (ws) => {
             log.debug(`Updated terminal ${data.terminalId.slice(-8)} embedded status to ${data.embedded}`);
           }
           break;
+
+        case 'attach-tmux':
+          // Attach to existing tmux session (simplified tmux-only flow)
+          const { sessionName } = data;
+          log.info(`Attaching to tmux session: ${sessionName}`);
+
+          try {
+            const { execSync, spawn } = require('child_process');
+            // Verify session exists
+            execSync(`tmux has-session -t "${sessionName}" 2>/dev/null`);
+
+            // Send confirmation
+            ws.send(JSON.stringify({
+              type: 'terminal-spawned',
+              sessionName: sessionName
+            }));
+
+            // Capture initial screen content
+            try {
+              const initialContent = execSync(`tmux capture-pane -t "${sessionName}" -p -S -100`).toString();
+              if (initialContent) {
+                ws.send(JSON.stringify({
+                  type: 'output',
+                  data: initialContent
+                }));
+              }
+            } catch (captureErr) {
+              log.debug(`Could not capture initial content: ${captureErr.message}`);
+            }
+
+            // Start streaming output using tmux pipe-pane
+            // This will send all output from the pane to a file, which we'll tail
+            const pipeFile = `/tmp/tmux-pipe-${sessionName}`;
+            try {
+              execSync(`tmux pipe-pane -t "${sessionName}" "cat >> ${pipeFile}"`);
+
+              // Tail the pipe file and send to WebSocket
+              const tail = spawn('tail', ['-f', pipeFile]);
+
+              tail.stdout.on('data', (data) => {
+                if (ws.readyState === WebSocket.OPEN) {
+                  ws.send(JSON.stringify({
+                    type: 'output',
+                    data: data.toString()
+                  }));
+                }
+              });
+
+              // Clean up on disconnect
+              ws.on('close', () => {
+                tail.kill();
+                try {
+                  execSync(`rm -f ${pipeFile}`);
+                  execSync(`tmux pipe-pane -t "${sessionName}" ""`); // Stop piping
+                } catch (e) {
+                  // Ignore cleanup errors
+                }
+              });
+            } catch (pipeErr) {
+              log.error(`Failed to set up pipe-pane: ${pipeErr.message}`);
+            }
+
+            log.success(`Attached to tmux session: ${sessionName}`);
+          } catch (error) {
+            ws.send(JSON.stringify({
+              type: 'error',
+              message: `Session ${sessionName} not found`
+            }));
+            log.error(`Failed to attach to session ${sessionName}:`, error.message);
+          }
+          break;
+
+        case 'input':
+          // Send input to tmux session (simplified tmux-only flow)
+          if (data.sessionName && data.data) {
+            try {
+              const { execSync } = require('child_process');
+              // Send keys to tmux session
+              const escapedData = data.data.replace(/'/g, "'\\''");
+              execSync(`tmux send-keys -t "${data.sessionName}" -l '${escapedData}'`);
+
+              // If data ends with \r, send Enter key
+              if (data.data.endsWith('\r')) {
+                execSync(`tmux send-keys -t "${data.sessionName}" Enter`);
+              }
+            } catch (error) {
+              log.error(`Failed to send input to session ${data.sessionName}:`, error.message);
+            }
+          }
+          break;
+
       }
     } catch (error) {
       console.error('WebSocket message error:', error);

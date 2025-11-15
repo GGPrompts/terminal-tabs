@@ -85,7 +85,7 @@ const terminalTypeConfigs = {
     command: null,
     color: '#6b7280',
     icon: '📟',
-    resumable: false,
+    resumable: true, // Tmux-only version: all terminals persist
     defaultEnv: {}
   },
   'dashboard': {
@@ -109,7 +109,7 @@ const terminalTypeConfigs = {
     command: null,
     color: '#f59e0b',
     icon: '🛠️',
-    resumable: false,
+    resumable: true, // Tmux-only version: all terminals persist
     defaultEnv: {}
   }
 };
@@ -381,10 +381,8 @@ class UnifiedSpawnSystem {
 
   // Unified validation method
   validateTerminalConfig(terminalType, config) {
-    // Special validation for TUI tools
-    if (terminalType === 'tui-tool' && !config.toolName && !config.commands) {
-      return { valid: false, error: 'TUI tool requires either toolName or commands' };
-    }
+    // Simplified version - no special validation needed
+    // TUI tools work fine with just the command from spawn-options.json
     return { valid: true };
   }
 
