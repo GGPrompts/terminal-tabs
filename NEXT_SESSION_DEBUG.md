@@ -331,3 +331,110 @@ chrome.tabGroups.update(groupId, {
 **Priority:** Post-MVP (very exciting, but after terminals work)
 
 **Reference:** https://developer.chrome.com/docs/extensions/ai
+
+---
+
+### Local LLMs via Docker Integration
+
+**Idea:** Integrate with local LLMs running in Docker containers (Ollama, LM Studio, etc.)
+
+**How It Works:**
+Most Docker LLM containers expose OpenAI-compatible REST APIs on localhost:
+
+```javascript
+// Extension connects to Docker container on localhost
+const response = await fetch('http://localhost:11434/api/generate', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    model: 'codellama',
+    prompt: 'Explain this terminal error and suggest a fix:\n' + errorText,
+    stream: false
+  })
+})
+
+const result = await response.json()
+// Display explanation to user
+```
+
+**Advantages Over Chrome's Built-in AI:**
+- ✅ **Model Choice**: Llama 3, CodeLlama, Mistral, Deepseek, Phi, etc.
+- ✅ **Specialized Models**: CodeLlama for code, Mistral for chat, Deepseek for reasoning
+- ✅ **More Powerful**: Can run larger models (7B, 13B, 70B) vs Gemini Nano
+- ✅ **Browser Independent**: Works in Chrome, Firefox, Edge, Brave, etc.
+- ✅ **Full Control**: Adjust temperature, max_tokens, system prompts
+- ✅ **Privacy**: Still 100% local (never leaves your machine)
+- ✅ **Free**: No API keys or quotas
+
+**Popular Docker LLM Options:**
+1. **Ollama** - Simple CLI, huge model library, Docker Desktop integration
+2. **LM Studio** - User-friendly GUI, model marketplace
+3. **LocalAI** - Drop-in OpenAI replacement with GPT-4 compatible API
+4. **text-generation-webui** - Advanced features, many model formats
+
+**Example Use Cases for Tabz:**
+
+1. **CodeLlama for Error Explanations**
+   ```javascript
+   // Use specialized code model
+   const help = await callLocalLLM('codellama',
+     `Explain and fix: ${errorMessage}`
+   )
+   ```
+
+2. **Deepseek for Command Generation**
+   ```javascript
+   // Natural language → Bash command
+   const cmd = await callLocalLLM('deepseek-coder',
+     `Convert to bash: find all node processes using port 3000`
+   )
+   // Returns: lsof -ti:3000 | xargs kill -9
+   ```
+
+3. **Mistral for Session Summaries**
+   ```javascript
+   // Summarize what happened in terminal
+   const summary = await callLocalLLM('mistral',
+     `Summarize this terminal session:\n${commandHistory}`
+   )
+   ```
+
+**Implementation Approach:**
+
+```typescript
+// Settings allow user to configure local LLM endpoint
+interface LLMSettings {
+  enabled: boolean
+  endpoint: string  // e.g., 'http://localhost:11434'
+  model: string     // e.g., 'codellama', 'llama3', 'mistral'
+  provider: 'ollama' | 'lm-studio' | 'localai' | 'custom'
+}
+
+// Graceful fallback chain:
+// 1. Try local Docker LLM (if configured)
+// 2. Fall back to Chrome's built-in AI (if available)
+// 3. Fall back to basic text processing (no LLM)
+```
+
+**Docker Desktop Integration:**
+- User pulls model: `docker pull ollama/ollama && docker run -p 11434:11434 ollama/ollama`
+- Extension auto-detects if endpoint is available
+- Settings UI to select model and configure endpoint
+
+**Why This is Better for Terminal Use:**
+- **CodeLlama** understands code/compiler errors better than general LLMs
+- **Larger context windows** for analyzing long terminal output
+- **Faster** (no network round-trip like cloud APIs)
+- **Works offline** for air-gapped systems
+
+**Compatibility Note:**
+- Can use **both** Chrome AI APIs and Docker LLMs
+- Chrome AI for quick on-device tasks (language detection, simple summaries)
+- Docker LLM for heavy lifting (complex error analysis, code generation)
+
+**Priority:** Post-MVP (after terminal display works)
+
+**References:**
+- Ollama: https://ollama.ai
+- Docker Desktop AI: https://www.docker.com/products/docker-desktop/
+- OpenAI API compatibility for easy integration
