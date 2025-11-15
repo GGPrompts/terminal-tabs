@@ -4,6 +4,10 @@ export type MessageType =
   | 'OPEN_SESSION'
   | 'SPAWN_TERMINAL'
   | 'CLOSE_SESSION'
+  | 'CLOSE_TERMINAL'
+  | 'TERMINAL_INPUT'
+  | 'TERMINAL_OUTPUT'
+  | 'TERMINAL_RESIZE'
   | 'ADD_CONTEXT_MENU'
   | 'SHOW_ERROR_SUGGESTION'
   | 'UPDATE_BADGE'
@@ -30,6 +34,30 @@ export interface SpawnTerminalMessage extends BaseMessage {
 export interface CloseSessionMessage extends BaseMessage {
   type: 'CLOSE_SESSION';
   sessionName: string;
+}
+
+export interface CloseTerminalMessage extends BaseMessage {
+  type: 'CLOSE_TERMINAL';
+  terminalId: string;
+}
+
+export interface TerminalInputMessage extends BaseMessage {
+  type: 'TERMINAL_INPUT';
+  terminalId: string;
+  data: string;
+}
+
+export interface TerminalOutputMessage extends BaseMessage {
+  type: 'TERMINAL_OUTPUT';
+  terminalId: string;
+  data: string;
+}
+
+export interface TerminalResizeMessage extends BaseMessage {
+  type: 'TERMINAL_RESIZE';
+  terminalId: string;
+  cols: number;
+  rows: number;
 }
 
 export interface AddContextMenuMessage extends BaseMessage {
@@ -71,6 +99,10 @@ export type ExtensionMessage =
   | OpenSessionMessage
   | SpawnTerminalMessage
   | CloseSessionMessage
+  | CloseTerminalMessage
+  | TerminalInputMessage
+  | TerminalOutputMessage
+  | TerminalResizeMessage
   | AddContextMenuMessage
   | ShowErrorSuggestionMessage
   | UpdateBadgeMessage

@@ -35,11 +35,20 @@ function connectWebSocket() {
       const message = JSON.parse(event.data)
       console.log('📨 WS message received:', message.type)
 
-      // Broadcast to all connected clients
-      broadcastToClients({
-        type: 'WS_MESSAGE',
-        data: message,
-      })
+      // Handle terminal output specially - broadcast directly as TERMINAL_OUTPUT
+      if (message.type === 'output') {
+        broadcastToClients({
+          type: 'TERMINAL_OUTPUT',
+          terminalId: message.terminalId,
+          data: message.data,
+        })
+      } else {
+        // Broadcast other messages as WS_MESSAGE
+        broadcastToClients({
+          type: 'WS_MESSAGE',
+          data: message,
+        })
+      }
     } catch (err) {
       console.error('Failed to parse WebSocket message:', err)
     }
@@ -124,6 +133,33 @@ chrome.runtime.onMessage.addListener((message: ExtensionMessage, sender, sendRes
       })
       removeActiveSession(message.sessionName)
       updateBadge()
+      break
+
+    case 'CLOSE_TERMINAL':
+      // Close specific terminal by ID
+      sendToWebSocket({
+        type: 'close-terminal',
+        terminalId: message.terminalId,
+      })
+      break
+
+    case 'TERMINAL_INPUT':
+      // Forward terminal input to backend
+      sendToWebSocket({
+        type: 'command',
+        terminalId: message.terminalId,
+        command: message.data,
+      })
+      break
+
+    case 'TERMINAL_RESIZE':
+      // Forward terminal resize to backend
+      sendToWebSocket({
+        type: 'resize',
+        terminalId: message.terminalId,
+        cols: message.cols,
+        rows: message.rows,
+      })
       break
 
     case 'UPDATE_BADGE':

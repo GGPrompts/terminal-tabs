@@ -33,18 +33,30 @@ function ExtensionPopup() {
   const [searchValue, setSearchValue] = useState('')
 
   useEffect(() => {
+    console.log('[Popup] Loading data...')
+    console.log('[Popup] spawnOptionsData:', spawnOptionsData)
+    console.log('[Popup] spawnOptions array:', spawnOptionsData.spawnOptions)
+    console.log('[Popup] spawnOptions length:', spawnOptionsData.spawnOptions?.length)
+
+    // Clear old active sessions from storage (reset to 0)
+    chrome.storage.local.set({ activeSessions: [] })
+
     // Load recent sessions from storage
     getLocal(['recentSessions']).then(({ recentSessions }) => {
+      console.log('[Popup] Recent sessions:', recentSessions)
       setRecentSessions(recentSessions || [])
     })
 
-    // Get active session count
+    // Get active session count (should be 0 after clear)
     getActiveSessionCount().then(count => {
+      console.log('[Popup] Active session count:', count)
       setActiveSessionCount(count)
     })
 
     // Load spawn options from imported JSON
-    setSpawnOptions(spawnOptionsData.spawnOptions || [])
+    const options = spawnOptionsData.spawnOptions || []
+    console.log('[Popup] Setting spawn options:', options.length, 'options')
+    setSpawnOptions(options)
   }, [])
 
   const handleSessionSelect = (sessionName: string) => {
@@ -64,16 +76,30 @@ function ExtensionPopup() {
     window.close()
   }
 
-  const handleOpenSettings = () => {
+  const handleOpenSettings = async () => {
     // TODO: Create options page
     // For now, just open side panel
-    chrome.sidePanel.open({ windowId: chrome.windows.WINDOW_ID_CURRENT })
-    window.close()
+    try {
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true })
+      if (tab?.windowId) {
+        await chrome.sidePanel.open({ windowId: tab.windowId })
+        window.close()
+      }
+    } catch (error) {
+      console.error('[Popup] Failed to open side panel:', error)
+    }
   }
 
-  const handleOpenSidePanel = () => {
-    chrome.sidePanel.open({ windowId: chrome.windows.WINDOW_ID_CURRENT })
-    window.close()
+  const handleOpenSidePanel = async () => {
+    try {
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true })
+      if (tab?.windowId) {
+        await chrome.sidePanel.open({ windowId: tab.windowId })
+        window.close()
+      }
+    } catch (error) {
+      console.error('[Popup] Failed to open side panel:', error)
+    }
   }
 
   // Filter spawn options based on search
@@ -85,6 +111,10 @@ function ExtensionPopup() {
   const filteredRecentSessions = recentSessions.filter(session =>
     session.name.toLowerCase().includes(searchValue.toLowerCase())
   )
+
+  console.log('[Popup] Render - spawnOptions:', spawnOptions.length)
+  console.log('[Popup] Render - filteredSpawnOptions:', filteredSpawnOptions.length)
+  console.log('[Popup] Render - searchValue:', searchValue)
 
   return (
     <div className="w-[400px] h-[500px] bg-background text-foreground">
@@ -127,8 +157,8 @@ function ExtensionPopup() {
                 {filteredRecentSessions.map(session => (
                   <CommandItem
                     key={session.name}
+                    value={session.name}
                     onSelect={() => handleSessionSelect(session.name)}
-                    className="cursor-pointer"
                   >
                     <Clock className="mr-2 h-4 w-4" />
                     <div className="flex-1">
@@ -147,8 +177,8 @@ function ExtensionPopup() {
           {/* Quick Spawn */}
           <CommandGroup heading="Quick Spawn">
             <CommandItem
+              value="open-side-panel"
               onSelect={handleOpenSidePanel}
-              className="cursor-pointer text-primary"
             >
               <Plus className="mr-2 h-4 w-4" />
               <div className="flex-1">
@@ -162,8 +192,8 @@ function ExtensionPopup() {
             {filteredSpawnOptions.slice(0, 8).map(option => (
               <CommandItem
                 key={option.terminalType}
+                value={option.label}
                 onSelect={() => handleSpawn(option)}
-                className="cursor-pointer"
               >
                 <span className="mr-2 text-lg">{option.icon}</span>
                 <div className="flex-1">

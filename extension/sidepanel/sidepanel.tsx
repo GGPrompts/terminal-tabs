@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react'
 import ReactDOM from 'react-dom/client'
-import { Terminal, Pin, PinOff, Settings, Plus } from 'lucide-react'
+import { Terminal as TerminalIcon, Pin, PinOff, Settings, Plus } from 'lucide-react'
 import { Badge } from '../components/ui/badge'
+import { Terminal } from '../components/Terminal'
 import { onMessage, sendMessage } from '../shared/messaging'
 import { getLocal, setLocal } from '../shared/storage'
 import '../styles/globals.css'
@@ -84,7 +85,9 @@ function SidePanelTerminal() {
   }
 
   const handleOpenSettings = () => {
-    chrome.runtime.openOptionsPage()
+    // TODO: Create options page
+    // For now, do nothing
+    console.log('[Sidepanel] Settings clicked - options page not yet implemented')
   }
 
   return (
@@ -92,7 +95,7 @@ function SidePanelTerminal() {
       {/* Header */}
       <div className="flex items-center justify-between p-3 border-b bg-card">
         <div className="flex items-center gap-2">
-          <Terminal className="h-4 w-4" />
+          <TerminalIcon className="h-4 w-4" />
           <h1 className="text-sm font-semibold">Terminal Tabs</h1>
           {wsConnected ? (
             <Badge variant="secondary" className="text-xs">Connected</Badge>
@@ -154,10 +157,10 @@ function SidePanelTerminal() {
       )}
 
       {/* Terminal View */}
-      <div className="flex-1 relative">
+      <div className="flex-1 relative overflow-hidden">
         {sessions.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
-            <Terminal className="h-16 w-16 mb-4 opacity-20" />
+            <TerminalIcon className="h-16 w-16 mb-4 opacity-20" />
             <p className="text-lg font-medium mb-2">No active terminals</p>
             <p className="text-sm mb-4">Spawn a terminal to get started</p>
             <button
@@ -170,14 +173,25 @@ function SidePanelTerminal() {
           </div>
         ) : (
           <div className="h-full">
-            {/* TODO: Integrate actual xterm.js terminal component */}
-            <div className="flex items-center justify-center h-full">
-              <div className="text-center text-muted-foreground">
-                <Terminal className="h-12 w-12 mx-auto mb-2 opacity-50" />
-                <p className="text-sm">Terminal view coming soon...</p>
-                <p className="text-xs mt-1">Session: {currentSession}</p>
+            {sessions.map(session => (
+              <div
+                key={session.id}
+                className="h-full"
+                style={{ display: session.id === currentSession ? 'block' : 'none' }}
+              >
+                <Terminal
+                  terminalId={session.id}
+                  sessionName={session.name}
+                  terminalType={session.type}
+                  onClose={() => {
+                    sendMessage({
+                      type: 'CLOSE_TERMINAL',
+                      terminalId: session.id,
+                    })
+                  }}
+                />
               </div>
-            </div>
+            ))}
           </div>
         )}
       </div>
