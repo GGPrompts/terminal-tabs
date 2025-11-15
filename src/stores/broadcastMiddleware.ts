@@ -23,6 +23,7 @@ import { StateCreator, StoreMutatorIdentifier } from 'zustand'
 
 type BroadcastMessage = {
   type: 'state-changed' | 'reload-all'
+  payload?: string  // JSON-stringified state
   state?: any
   from: string
   at: number
@@ -74,16 +75,25 @@ export const broadcastMiddleware = <T extends object>(
           }
 
           // Handle state-changed message
-          if (data.type === 'state-changed' && data.state) {
-            console.log('[BroadcastMiddleware] 🔄 Applying state from another window:', {
-              from: data.from,
-              terminalsCount: data.state.terminals?.length || 0,
-              detachedCount: data.state.terminals?.filter((t: any) => t.status === 'detached').length || 0
-            })
+          if (data.type === 'state-changed' && data.payload) {
+            try {
+              const parsed = JSON.parse(data.payload)
+              const incomingState = parsed?.state
 
-            // Apply state using replace mode to prevent infinite broadcast loop
-            // replace = true means this setState won't trigger our broadcast logic below
-            api.setState(data.state, true)
+              if (incomingState) {
+                console.log('[BroadcastMiddleware] 🔄 Applying state from another window:', {
+                  from: data.from,
+                  terminalsCount: incomingState.terminals?.length || 0,
+                  detachedCount: incomingState.terminals?.filter((t: any) => t.status === 'detached').length || 0
+                })
+
+                // Apply state using replace mode to prevent infinite broadcast loop
+                // replace = true means this setState won't trigger our broadcast logic below
+                api.setState(incomingState, true)
+              }
+            } catch (error) {
+              console.error('[BroadcastMiddleware] Failed to parse payload:', error)
+            }
           }
         }
 
@@ -114,17 +124,25 @@ export const broadcastMiddleware = <T extends object>(
           const state = get()
 
           try {
+            // Only broadcast serializable data (exclude functions)
+            const serializable = {
+              terminals: (state as any).terminals,
+              activeTerminalId: (state as any).activeTerminalId,
+              focusedTerminalId: (state as any).focusedTerminalId,
+            }
+
             // Broadcast synchronously after state update (NO setTimeout!)
+            // Send as JSON-stringified payload for proper serialization
             channel.postMessage({
               type: 'state-changed',
-              state,
+              payload: JSON.stringify({ state: serializable }),
               from: currentWindowId,
               at: Date.now()
             } as BroadcastMessage)
 
             console.log('[BroadcastMiddleware] 📡 Broadcasted state change to other windows:', {
-              terminalsCount: (state as any).terminals?.length || 0,
-              detachedCount: (state as any).terminals?.filter((t: any) => t.status === 'detached').length || 0
+              terminalsCount: serializable.terminals?.length || 0,
+              detachedCount: serializable.terminals?.filter((t: any) => t.status === 'detached').length || 0
             })
           } catch (error) {
             console.warn('[BroadcastMiddleware] Failed to broadcast message:', error)

@@ -135,8 +135,8 @@ fi
 echo -e "  Kill:    ${YELLOW}tmux kill-session -t $SESSION_NAME${NC}"
 echo ""
 echo -e "${BLUE}URLs:${NC}"
-echo -e "  Frontend: ${YELLOW}http://localhost:5173${NC}"
-echo -e "  Backend:  ${YELLOW}http://localhost:8127${NC}"
+echo -e "  Frontend: ${YELLOW}http://localhost:5174${NC} (Showcase Branch)"
+echo -e "  Backend:  ${YELLOW}http://localhost:8128${NC} (Showcase Branch)"
 echo ""
 echo -e "${BLUE}Log Level: ${YELLOW}$LOG_LEVEL${NC} ${NC}(0=silent, 1=fatal, 2=error, 3=warn, 4=info, 5=debug)"
 if [[ "$ENABLE_LOGS" =~ ^[Yy]$ ]]; then

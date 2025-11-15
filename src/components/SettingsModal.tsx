@@ -5,6 +5,8 @@ import { FontFamilyDropdown } from './FontFamilyDropdown'
 import { BackgroundGradientDropdown } from './BackgroundGradientDropdown'
 import { TextColorThemeDropdown } from './TextColorThemeDropdown'
 import { useSettingsStore } from '../stores/useSettingsStore'
+import { InlineTerminalIcon } from './ui/avatar-icon'
+import { Folder } from 'lucide-react'
 
 interface SpawnOption {
   label: string
@@ -475,7 +477,7 @@ export function SettingsModal({ isOpen, onClose, onSave }: SettingsModalProps) {
           {activeTab === 'global-defaults' ? (
             <div className="global-defaults-panel">
               <div className="settings-section">
-                <h3>📁 Default Working Directory</h3>
+                <h3><Folder className="w-5 h-5 inline mr-2 text-blue-400" />Default Working Directory</h3>
                 <p className="setting-description">Used when spawn options don't specify a directory</p>
 
                 {/* Project dropdown */}
@@ -531,7 +533,9 @@ export function SettingsModal({ isOpen, onClose, onSave }: SettingsModalProps) {
                         {projects.map((project, index) => (
                           <div key={index} className="option-item">
                             <div className="option-main">
-                              <span className="option-icon">📁</span>
+                              <span className="option-icon">
+                                <Folder className="w-5 h-5 text-blue-400" />
+                              </span>
                               <div className="option-details">
                                 <div className="option-label">{project.name}</div>
                                 <div className="option-meta">{project.workingDir}</div>
@@ -737,7 +741,9 @@ export function SettingsModal({ isOpen, onClose, onSave }: SettingsModalProps) {
                   >
                     <div className="option-drag-handle" title="Drag to reorder">⋮⋮</div>
                     <div className="option-main">
-                      <span className="option-icon">{option.icon}</span>
+                      <span className="option-icon">
+                        <InlineTerminalIcon terminalType={option.terminalType} size="md" />
+                      </span>
                       <div className="option-details">
                         <div className="option-label">
                           {option.label}

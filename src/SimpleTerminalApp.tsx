@@ -8,6 +8,9 @@ import { HotkeysHelpModal } from './components/HotkeysHelpModal'
 import { FontFamilyDropdown } from './components/FontFamilyDropdown'
 import { BackgroundGradientDropdown } from './components/BackgroundGradientDropdown'
 import { TextColorThemeDropdown } from './components/TextColorThemeDropdown'
+import { TerminalCarousel } from './components/showcase/TerminalCarousel'
+import { InlineTerminalIcon, AvatarIcon } from './components/ui/avatar-icon'
+import { Pin, Terminal as TerminalLucideIcon, Trash2, Settings, Keyboard, LayoutGrid, FileText, Folder } from 'lucide-react'
 import { Agent, TERMINAL_TYPES } from './types'
 import { useSimpleTerminalStore, Terminal as StoredTerminal } from './stores/simpleTerminalStore'
 import { useSettingsStore } from './stores/useSettingsStore'
@@ -176,17 +179,19 @@ function SortableTab({ terminal, isActive, isFocused, isSplitActive, onActivate,
       const isVertical = terminal.splitLayout.type === 'vertical'
       const splitArrow = isVertical ? '↔' : '↕'
 
-      // Get icons from both panes
-      const paneIcons = terminal.splitLayout.panes.map(pane => {
+      // Get terminal types from both panes
+      const paneTypes = terminal.splitLayout.panes.map(pane => {
         const paneTerminal = allTerminals.find(t => t.id === pane.terminalId)
-        return paneTerminal?.icon || '💻'
+        return paneTerminal?.terminalType || 'default'
       })
 
       return (
         <span className="tab-icon-split">
           <span className="split-arrow">{splitArrow}</span>
-          {paneIcons.map((icon, idx) => (
-            <span key={idx} className="split-emoji">{icon}</span>
+          {paneTypes.map((terminalType, idx) => (
+            <span key={idx} className="split-emoji">
+              <InlineTerminalIcon terminalType={terminalType} size="xs" />
+            </span>
           ))}
         </span>
       )
@@ -194,9 +199,7 @@ function SortableTab({ terminal, isActive, isFocused, isSplitActive, onActivate,
 
     // Regular single terminal
     return (
-      <span className="tab-icon-single">
-        {terminal.icon || TERMINAL_TYPES.find(t => t.value === terminal.terminalType)?.icon || '💻'}
-      </span>
+      <InlineTerminalIcon terminalType={terminal.terminalType} size="sm" />
     )
   }
 
@@ -215,9 +218,9 @@ function SortableTab({ terminal, isActive, isFocused, isSplitActive, onActivate,
       {...(isDraggable ? listeners : {})}
     >
       {terminal.status === 'detached' ? (
-        <span className="tab-icon-single">📌</span>
+        <Pin className="w-4 h-4 text-yellow-500" />
       ) : (
-        <span className="tab-icon-single">{terminal.icon || '💻'}</span>
+        <InlineTerminalIcon terminalType={terminal.terminalType} size="sm" />
       )}
       <span className="tab-label">{terminal.name}</span>
 
@@ -312,6 +315,7 @@ function SimpleTerminalApp() {
   const [showSpawnMenu, setShowSpawnMenu] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
   const [showHotkeysHelp, setShowHotkeysHelp] = useState(false)
+  const [viewMode, setViewMode] = useState<'single' | 'grid'>('single')
 
   // Initialize currentWindowId first to determine header visibility
   const [currentWindowId] = useState(() => {
@@ -383,6 +387,7 @@ function SimpleTerminalApp() {
   const terminalRef = useRef<any>(null)
   const wsRef = useRef<WebSocket | null>(null) // Needed by both spawning and WebSocket hooks
   const pendingSpawns = useRef<Map<string, StoredTerminal>>(new Map()) // Track pending spawns by requestId
+  const terminalContainerRefs = useRef<Map<string, HTMLDivElement>>(new Map()) // For carousel thumbnail generation
 
   const {
     terminals: storedTerminals,
@@ -1785,7 +1790,9 @@ End of error report
                   setShowDetachedDropdown(false)
                 }}
               >
-                <span className="detached-dropdown-icon">{terminal.icon || '💻'}</span>
+                <span className="detached-dropdown-icon">
+                  <InlineTerminalIcon terminalType={terminal.terminalType} size="sm" />
+                </span>
                 <span className="detached-dropdown-name">{terminal.name}</span>
                 {terminal.sessionName && (
                   <span className="detached-dropdown-session">
@@ -1800,11 +1807,18 @@ End of error report
 
         <div className="header-actions">
           <button
+            className="view-mode-button"
+            onClick={() => setViewMode(viewMode === 'single' ? 'grid' : 'single')}
+            title={viewMode === 'single' ? 'Switch to Grid View' : 'Switch to Single View'}
+          >
+            {viewMode === 'single' ? <LayoutGrid className="w-4 h-4" /> : <FileText className="w-4 h-4" />}
+          </button>
+          <button
             className="clear-sessions-button"
             onClick={handleClearAllSessions}
             title="Clear all sessions and localStorage"
           >
-            🗑️
+            <Trash2 className="w-4 h-4" />
           </button>
           {consoleErrors.length > 0 && (
             <button
@@ -1825,14 +1839,14 @@ End of error report
             onClick={() => setShowSettings(true)}
             title="Settings"
           >
-            ⚙️
+            <Settings className="w-4 h-4" />
           </button>
           <button
             className="hotkeys-button"
             onClick={() => setShowHotkeysHelp(true)}
             title="Keyboard Shortcuts"
           >
-            ⌨️
+            <Keyboard className="w-4 h-4" />
           </button>
           <div className={`connection-status ${connectionStatus}`}>
             <span className="status-dot"></span>
@@ -2225,12 +2239,14 @@ End of error report
                       }
                     }}
                   >
-                    <span className="spawn-icon">{option.icon}</span>
+                    <span className="spawn-icon">
+                      <InlineTerminalIcon terminalType={option.terminalType} size="lg" />
+                    </span>
                     <div className="spawn-info">
                       <div className="spawn-label">{option.label}</div>
                       <div className="spawn-description">{option.description}</div>
                       <div className="spawn-workingdir">
-                        📁 {effectiveWorkingDir}
+                        <Folder className="w-3 h-3 inline mr-1" /> {effectiveWorkingDir}
                         {isOverride && <span className="workingdir-badge workingdir-override"> (override)</span>}
                         {isCustom && <span className="workingdir-badge workingdir-custom"> (custom)</span>}
                         {isDefault && <span className="workingdir-badge workingdir-default"> (default)</span>}
@@ -2260,7 +2276,7 @@ End of error report
       <div className="terminal-display">
         {visibleTerminals.length === 0 ? (
           <div className="empty-state">
-            <div className="empty-icon">📟</div>
+            <TerminalLucideIcon className="w-24 h-24 mx-auto mb-4 text-muted-foreground opacity-50" strokeWidth={1.5} />
             <div className="empty-text">No terminals open</div>
             <button className="spawn-button" onClick={() => setShowSpawnMenu(true)}>
               Spawn Terminal
@@ -2268,7 +2284,31 @@ End of error report
           </div>
         ) : (
           <>
-            {/* Render ONLY visible terminals (exclude split containers and hidden terminals) */}
+            {/* Show carousel overlay when in grid mode */}
+            {viewMode === 'grid' && (
+              <div style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                zIndex: 100,
+                backgroundColor: 'var(--bg-color, #0a0a0a)',
+                overflowY: 'auto',
+              }}>
+                <TerminalCarousel
+                  terminals={visibleTerminals}
+                  activeTerminalId={activeTerminalId}
+                  onTerminalSelect={(id) => {
+                    setActiveTerminal(id)
+                    setViewMode('single') // Switch back to single view when selecting a terminal
+                  }}
+                  terminalRefs={terminalContainerRefs.current}
+                />
+              </div>
+            )}
+
+            {/* ALWAYS render terminals (even in grid mode) so xterm.js can attach */}
             {visibleTerminals
               .filter(terminal => {
                 const isHidden = terminal.isHidden === true
@@ -2318,6 +2358,13 @@ End of error report
               return (
                 <div
                   key={terminal.id}
+                  ref={(el) => {
+                    if (el) {
+                      terminalContainerRefs.current.set(terminal.id, el)
+                    } else {
+                      terminalContainerRefs.current.delete(terminal.id)
+                    }
+                  }}
                   style={{
                     // Use absolute positioning instead of display:none
                     // This allows xterm.js to initialize properly with non-zero dimensions
@@ -2354,7 +2401,7 @@ End of error report
         <div className="app-footer">
           <div className="footer-terminal-info">
             <span className="footer-terminal-icon">
-              {displayTerminal.icon || '💻'}
+              <InlineTerminalIcon terminalType={displayTerminal.terminalType} size="sm" />
             </span>
             <span className="footer-terminal-name">{displayAgent.name}</span>
             <span className="footer-terminal-type">({displayAgent.terminalType})</span>

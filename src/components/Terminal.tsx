@@ -326,19 +326,38 @@ export const Terminal = React.forwardRef<any, TerminalProps>(
       // Ensure element exists and has dimensions before opening
       // Bounded retry logic for popout windows where element may have 0x0 dimensions initially
       let retryCount = 0;
-      const MAX_RETRIES = 10;
-      const RETRY_DELAY = 50;
+      const MAX_RETRIES = 20;  // Increased from 10
+      const RETRY_DELAY = 100; // Increased from 50ms
 
       const attemptOpen = () => {
-        if (terminalRef.current && terminalRef.current.offsetWidth > 0 && terminalRef.current.offsetHeight > 0) {
-          xterm.open(terminalRef.current);
-          console.log(`[Terminal] xterm opened successfully for ${agent.name} (attempt ${retryCount + 1})`);
+        const el = terminalRef.current;
+        if (!el) return;
+
+        // Check the full parent chain
+        const grandparent = el.parentElement?.parentElement;
+        const greatGrandparent = grandparent?.parentElement;
+
+        const dims = {
+          self: `${el.offsetWidth}x${el.offsetHeight}`,
+          parent: `${el.parentElement?.offsetWidth || 0}x${el.parentElement?.offsetHeight || 0}`,
+          grandparent: `${grandparent?.offsetWidth || 0}x${grandparent?.offsetHeight || 0}`,
+          greatGrandparent: `${greatGrandparent?.offsetWidth || 0}x${greatGrandparent?.offsetHeight || 0}`,
+          parentClasses: el.parentElement?.className || 'none',
+          grandparentClasses: grandparent?.className || 'none',
+        };
+
+        if (el.offsetWidth > 0 && el.offsetHeight > 0) {
+          xterm.open(el);
+          console.log(`[Terminal] ✅ Opened ${agent.name} at ${dims.self} on attempt ${retryCount + 1}`);
         } else if (retryCount < MAX_RETRIES) {
           retryCount++;
-          console.log(`[Terminal] Element not ready (0x0 dimensions), retrying... (${retryCount}/${MAX_RETRIES})`);
+          if (retryCount === 1 || retryCount === MAX_RETRIES) {
+            // Log full chain on first and last attempt
+            console.log(`[Terminal] ⏳ Attempt ${retryCount}: ${JSON.stringify(dims, null, 2)}`);
+          }
           setTimeout(attemptOpen, RETRY_DELAY);
         } else {
-          console.error(`[Terminal] ✗ Failed to open xterm after ${MAX_RETRIES} attempts - element has 0x0 dimensions`);
+          console.error(`[Terminal] ✗ Failed - Final dimensions: ${JSON.stringify(dims, null, 2)}`);
         }
       };
 
