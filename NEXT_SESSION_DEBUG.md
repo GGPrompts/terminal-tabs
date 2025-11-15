@@ -217,3 +217,43 @@ Extension is complete when:
 5. ✅ Multiple terminals work (tabs switch correctly)
 
 **We are 1-2 debug iterations away from working terminals!**
+
+---
+
+## 💡 Future Enhancement Ideas
+
+### Chrome Tab Groups Integration
+
+**Idea:** Use Chrome's [Tab Groups API](https://developer.chrome.com/docs/extensions/reference/api/tabGroups) to organize terminal sessions.
+
+**Potential Features:**
+- Auto-group terminals by type (all Claude Code sessions in one group, all Bash in another)
+- Color-code groups by project/workspace
+- Collapse/expand groups of related terminals
+- Sync tab groups with terminal sessions (create group when spawning related terminals)
+
+**Use Cases:**
+```javascript
+// Example: Group all terminals from same project
+chrome.tabGroups.update(groupId, {
+  title: "Tabz Development",
+  color: "blue",
+  collapsed: false
+})
+
+// Example: Auto-collapse background terminals
+chrome.tabGroups.update(groupId, {
+  title: "Background Services",
+  color: "grey",
+  collapsed: true
+})
+```
+
+**Implementation Notes:**
+- Could integrate with spawn-options.json `projects` field
+- Would work great with multi-window support (groups per window)
+- Could replace or complement existing tab management in side panel
+
+**Priority:** Post-MVP (after terminal display is working)
+
+**Reference:** https://developer.chrome.com/docs/extensions/reference/api/tabGroups
