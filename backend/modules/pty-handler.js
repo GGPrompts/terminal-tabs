@@ -163,6 +163,22 @@ class PTYHandler extends EventEmitter {
             log.warn(`Failed to set remain-on-exit for ${sessionName}:`, err.message);
           }
 
+          // CRITICAL: Check if we already have an ACTIVE PTY for this session
+          // If yes, REUSE it instead of creating a new one!
+          const existingActivePty = Array.from(this.processes.entries())
+            .find(([existingId, existingPty]) =>
+              existingPty.tmuxSession === sessionName &&
+              existingPty.status === 'active' &&
+              !existingPty.ptyProcess?.killed
+            );
+
+          if (existingActivePty) {
+            const [existingId, ptyInfo] = existingActivePty;
+            log.info(`✅ REUSING existing active PTY for session ${sessionName} (ID: ${existingId.slice(-8)})`);
+            log.info(`   Preventing duplicate PTY attachment - returning existing connection`);
+            return ptyInfo; // REUSE existing PTY instead of creating new one!
+          }
+
           // CRITICAL FIX: Clean up any old PTY for this session (even if disconnect is in progress)
           log.debug(`Searching for old PTYs with session: ${sessionName}`);
           for (const [existingId, existingPty] of this.processes.entries()) {
