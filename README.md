@@ -2,14 +2,46 @@
 
 **Tab>_** - A simple, lightweight tab-based terminal interface built with React, TypeScript, and xterm.js. Spawn multiple terminals in browser tabs with full terminal emulation powered by a Node.js backend.
 
+## 🌿 Feature Branches
+
+**Multiple experimental branches are in development!** See **[FEATURE_BRANCHES.md](FEATURE_BRANCHES.md)** for complete details.
+
+Quick overview:
+- **master** (this branch) - ✅ Production-ready, stable version
+- **feat/component-showcase** - 🎨 Advanced UI components (terminals working)
+- **feat/tmux-only-simple** - ⚠️ Simplified architecture (terminals NOT working yet)
+- **feat/chrome-extension** - 🌐 Chrome extension version (build issues)
+- **feat/ai-experiments** - 🤖 AI-powered features (terminals working + AI)
+- **tmux-manager** - 🚀 Go backend replacement (Phase 1 complete)
+
+---
+
 ## Features
 
+### Core Features
 - **Tab-Based Interface** - Multiple terminals in browser tabs, like VS Code's terminal panel
 - **15 Terminal Types** - Claude Code, Bash, TFE, LazyGit, and more
 - **Full Terminal Emulation** - Powered by xterm.js with WebGL rendering
 - **WebSocket Communication** - Real-time terminal I/O
 - **Persistent Backend** - Node.js backend with PTY support
 - **Lightweight** - Minimal dependencies, fast startup
+
+### Tmux Integration
+- **Dual Context Menu System**
+  - **Tab Menu** (right-click tab) - Session operations: detach, unsplit, move window, kill session
+  - **Pane Menu** (right-click terminal) - Pane operations: split, swap, mark, zoom, respawn, kill pane
+- **Tmux Window Switcher** - Navigate between tmux windows via submenu (shows when multiple windows exist)
+- **Dynamic Mark/Unmark** - Menu updates based on actual tmux pane state
+- **Full Keyboard Shortcuts** - All tmux operations available via `Alt+Key` (no Ctrl+B prefix needed)
+  - `Alt+H/V` - Split horizontal/vertical
+  - `Alt+U/D` - Swap pane up/down
+  - `Alt+M` - Mark pane
+  - `Alt+S` - Swap with marked pane
+  - `Alt+R` - Respawn pane
+  - `Alt+X` - Kill pane
+  - `Alt+Z` - Zoom toggle
+  - `Alt+Arrow` - Navigate panes
+  - See all shortcuts in Hotkeys Help Modal (⌨️ button in header)
 
 ## Quick Start
 

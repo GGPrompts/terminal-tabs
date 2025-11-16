@@ -42,6 +42,7 @@ interface TerminalProps {
   mountKey?: string;
   onTitleChange?: (title: string) => void; // Callback when xterm title changes
   isSelected?: boolean; // Whether this terminal is currently active (for tab switching refresh)
+  onContextMenu?: (e: React.MouseEvent, terminalId: string) => void; // Right-click handler for pane menu
 }
 
 export const Terminal = React.forwardRef<any, TerminalProps>(
@@ -60,6 +61,7 @@ export const Terminal = React.forwardRef<any, TerminalProps>(
       mountKey,
       onTitleChange,
       isSelected = false,
+      onContextMenu,
     },
     ref,
   ) => {
@@ -948,6 +950,7 @@ export const Terminal = React.forwardRef<any, TerminalProps>(
           <div
             className="terminal-body"
             ref={terminalRef}
+            onContextMenu={onContextMenu}
           />
         </div>
         {!embedded && (

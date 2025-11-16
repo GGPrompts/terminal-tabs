@@ -133,9 +133,12 @@ backend/
 - **Split terminals** - Horizontal/vertical splits with drag-to-resize
 - **Window isolation** - Each browser window independently manages its terminals
 - **Chrome side panel integration** - Perfect for multi-monitor setups with Chrome's built-in split view + reading list
+- **Dual context menu system** - Tab menu (session ops) + Pane menu (pane ops)
+- **Full keyboard shortcuts** - All tmux operations via Alt+Key (no Ctrl+B needed)
+- **Tmux window switcher** - Navigate between tmux windows via GUI
+- **Dynamic mark/unmark** - Menu updates based on actual tmux pane state
 
 ### What Needs Work
-- Keyboard shortcuts (Ctrl+T, Ctrl+W, Ctrl+Tab)
 - Tab reordering (drag tabs) - currently can only drag to split
 - Mobile responsiveness improvements
 
@@ -450,8 +453,8 @@ import { YourIcon } from 'lucide-react';
 
 ## 🐛 Known Issues
 
-1. **No Keyboard Shortcuts** - Missing Ctrl+T, Ctrl+W, etc.
-2. **Mobile Untested** - May need responsive CSS work
+1. **Mobile Untested** - May need responsive CSS work
+2. **Tab Reordering** - Can only drag to split, not reorder
 
 ---
 

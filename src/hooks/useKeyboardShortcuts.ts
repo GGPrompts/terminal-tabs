@@ -15,7 +15,13 @@ import { Terminal as StoredTerminal } from '../stores/simpleTerminalStore'
  * - Alt+0: Jump to last tab
  * - Ctrl+Shift+T: Reopen last closed tab (matches browser behavior)
  * - Alt+1-9: Jump to tab N
+ * - Alt+H: Split horizontal (tmux)
  * - Alt+V: Split vertical (tmux)
+ * - Alt+U: Swap pane up (tmux)
+ * - Alt+D: Swap pane down (tmux)
+ * - Alt+M: Mark pane (tmux)
+ * - Alt+S: Swap with marked pane (tmux)
+ * - Alt+R: Respawn pane (tmux)
  * - Alt+X: Close pane (tmux)
  * - Alt+Z: Zoom toggle (tmux)
  * - Alt+Arrow: Navigate between panes (tmux)
@@ -182,6 +188,16 @@ export function useKeyboardShortcuts(
             'X': 'kill-pane',
             'z': 'resize-pane -Z',
             'Z': 'resize-pane -Z',
+            'u': 'swap-pane -U',
+            'U': 'swap-pane -U',
+            'd': 'swap-pane -D',
+            'D': 'swap-pane -D',
+            'm': 'select-pane -m',
+            'M': 'select-pane -m',
+            's': 'swap-pane -s \'{marked}\'',
+            'S': 'swap-pane -s \'{marked}\'',
+            'r': 'respawn-pane -k',
+            'R': 'respawn-pane -k',
             'ArrowUp': 'select-pane -U',
             'ArrowDown': 'select-pane -D',
             'ArrowLeft': 'select-pane -L',

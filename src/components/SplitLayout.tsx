@@ -19,6 +19,7 @@ interface SplitLayoutProps {
   wsRef: React.RefObject<WebSocket | null>;
   terminalRef?: React.RefObject<any>;
   activeTerminalId: string | null;
+  onContextMenu?: (e: React.MouseEvent, terminalId: string) => void;
 }
 
 const SplitLayoutComponent: React.FC<SplitLayoutProps> = ({
@@ -31,6 +32,7 @@ const SplitLayoutComponent: React.FC<SplitLayoutProps> = ({
   wsRef,
   terminalRef,
   activeTerminalId,
+  onContextMenu,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const [containerWidth, setContainerWidth] = useState(0);
@@ -133,6 +135,7 @@ const SplitLayoutComponent: React.FC<SplitLayoutProps> = ({
           initialTheme={terminal.theme}
           initialBackground={terminal.background || THEME_BACKGROUNDS[terminal.theme || 'default'] || 'dark-neutral'}
           initialOpacity={terminal.transparency !== undefined ? terminal.transparency / 100 : 1}
+          onContextMenu={onContextMenu ? (e) => onContextMenu(e, terminal.id) : undefined}
           initialFontSize={terminal.fontSize}
           initialFontFamily={terminal.fontFamily}
           isSelected={terminal.id === activeTerminalId}
@@ -250,6 +253,7 @@ const SplitLayoutComponent: React.FC<SplitLayoutProps> = ({
                 initialTheme={leftTerminal.theme}
                 initialBackground={leftTerminal.background || THEME_BACKGROUNDS[leftTerminal.theme || 'default'] || 'dark-neutral'}
                 initialOpacity={leftTerminal.transparency !== undefined ? leftTerminal.transparency / 100 : 1}
+                onContextMenu={onContextMenu ? (e) => onContextMenu(e, leftTerminal.id) : undefined}
                 initialFontSize={leftTerminal.fontSize}
                 initialFontFamily={leftTerminal.fontFamily}
                 isSelected={leftTerminal.id === activeTerminalId}
@@ -274,6 +278,7 @@ const SplitLayoutComponent: React.FC<SplitLayoutProps> = ({
             initialTheme={rightTerminal.theme}
             initialBackground={rightTerminal.background || THEME_BACKGROUNDS[rightTerminal.theme || 'default'] || 'dark-neutral'}
             initialOpacity={rightTerminal.transparency !== undefined ? rightTerminal.transparency / 100 : 1}
+            onContextMenu={onContextMenu ? (e) => onContextMenu(e, rightTerminal.id) : undefined}
             initialFontSize={rightTerminal.fontSize}
             initialFontFamily={rightTerminal.fontFamily}
             isSelected={rightTerminal.id === activeTerminalId}
@@ -392,6 +397,7 @@ const SplitLayoutComponent: React.FC<SplitLayoutProps> = ({
                 initialTheme={topTerminal.theme}
                 initialBackground={topTerminal.background || THEME_BACKGROUNDS[topTerminal.theme || 'default'] || 'dark-neutral'}
                 initialOpacity={topTerminal.transparency !== undefined ? topTerminal.transparency / 100 : 1}
+                onContextMenu={onContextMenu ? (e) => onContextMenu(e, topTerminal.id) : undefined}
                 initialFontSize={topTerminal.fontSize}
                 initialFontFamily={topTerminal.fontFamily}
                 isSelected={topTerminal.id === activeTerminalId}
@@ -416,6 +422,7 @@ const SplitLayoutComponent: React.FC<SplitLayoutProps> = ({
             initialTheme={bottomTerminal.theme}
             initialBackground={bottomTerminal.background || THEME_BACKGROUNDS[bottomTerminal.theme || 'default'] || 'dark-neutral'}
             initialOpacity={bottomTerminal.transparency !== undefined ? bottomTerminal.transparency / 100 : 1}
+            onContextMenu={onContextMenu ? (e) => onContextMenu(e, bottomTerminal.id) : undefined}
             initialFontSize={bottomTerminal.fontSize}
             initialFontFamily={bottomTerminal.fontFamily}
             isSelected={bottomTerminal.id === activeTerminalId}

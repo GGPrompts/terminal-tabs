@@ -7,6 +7,98 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.4.0] - 2025-11-16
+
+### 🚀 Major Features
+
+#### Dual Context Menu System
+- **Added Pane Context Menu** - Right-click inside terminal for pane operations
+  - ➗ Split Horizontally
+  - ➖ Split Vertically
+  - ⬆️ Swap Up / ⬇️ Swap Down
+  - 📌 Mark / 📍 Unmark (dynamic toggle based on pane state)
+  - ↔️ Swap with Marked
+  - 🪟 Switch Window (submenu, only shows when multiple tmux windows exist)
+  - 🔄 Respawn
+  - 🔍 Zoom
+  - ❌ Kill Pane
+
+- **Reorganized Tab Context Menu** - Right-click on tab for session operations
+  - ✏️ Update Display Name...
+  - 📌 Detach (if attached to tmux)
+  - ↔️ Unsplit (if in split, moved from pane menu)
+  - 🗂️ Open in New Tab
+  - ↗️ Open in Separate Window
+  - ❌ Kill Session
+  - Removed split buttons from tab menu (now pane-only for clarity)
+
+#### Complete Keyboard Shortcut Coverage
+- **Added 5 new tmux shortcuts** - Full parity with tmux right-click menu
+  - `Alt+U` - Swap pane up
+  - `Alt+D` - Swap pane down
+  - `Alt+M` - Mark pane
+  - `Alt+S` - Swap with marked pane
+  - `Alt+R` - Respawn pane
+  - All shortcuts documented in Hotkeys Help Modal
+
+#### Tmux Window Switching
+- **Added window switcher submenu** - Navigate between tmux windows via GUI
+  - New API endpoint: `GET /api/tmux/windows/:name` - Lists all windows with index, name, active status
+  - Submenu shows all windows in session with active indicator (✓)
+  - Only appears when `windowCount > 1`
+  - Click to switch to any window instantly
+
+#### Dynamic Mark/Unmark Toggle
+- **Added pane marked status tracking** - Menu updates based on tmux state
+  - Backend API enhanced to return `paneMarked` status (via `#{pane_marked}`)
+  - Menu fetches fresh state on each right-click
+  - Shows "📌 Mark" when unmarked, "📍 Unmark" when marked
+  - Always in sync with actual tmux state
+
+### 🔧 Backend Enhancements
+
+- **API: GET /api/tmux/info/:name** - Enhanced to return `paneMarked` boolean
+- **API: GET /api/tmux/windows/:name** - New endpoint for window list
+- **API: POST /api/tmux/sessions/:name/command** - Generic tmux command executor (supports all pane operations)
+
+### 🎨 Frontend Improvements
+
+- **New State Management**:
+  - `paneContextMenu` - Separate state for pane right-clicks
+  - `tmuxWindows` - Cached window list for submenu
+  - `paneMarked` - Tracks current pane's marked status
+
+- **New Handlers**:
+  - `handlePaneContextMenu()` - Opens pane menu with fresh state
+  - `executeTmuxPaneCommand()` - Generic tmux command executor
+  - `fetchTmuxWindows()` - Loads window list for submenu
+  - `handleKillPane()` - Kills pane and removes from UI
+
+- **CSS Additions**:
+  - `.context-menu-divider` - Visual separators in menus
+  - `.context-menu-submenu` - Submenu container
+  - `.context-submenu-panel` - Floating submenu panel
+  - `.context-menu-item.disabled` - Grayed out items
+
+### 📝 Files Modified
+
+- `backend/routes/api.js` - Added tmux windows endpoint, enhanced info endpoint
+- `src/SimpleTerminalApp.tsx` - Dual context menu system, new handlers
+- `src/SimpleTerminalApp.css` - Submenu and divider styles
+- `src/components/Terminal.tsx` - Added `onContextMenu` prop
+- `src/components/SplitLayout.tsx` - Passes `onContextMenu` to all terminals
+- `src/hooks/useKeyboardShortcuts.ts` - Added 5 new tmux shortcuts
+- `src/components/HotkeysHelpModal.tsx` - Documented all new shortcuts
+
+### 🎯 User Impact
+
+- **No more tmux prefix needed** - All tmux operations available via right-click and keyboard
+- **Clear separation of concerns** - Tab menu = session, Pane menu = pane operations
+- **Full keyboard coverage** - Can disable native tmux right-click menu without losing functionality
+- **Smart UI** - Window switcher only shows when needed, Mark/Unmark toggles based on state
+
+---
+
 ## [1.3.0] - 2025-11-14
 
 ### 🚀 Major Features

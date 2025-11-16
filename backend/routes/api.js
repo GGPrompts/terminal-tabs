@@ -801,17 +801,18 @@ router.get('/tmux/info/:name', asyncHandler(async (req, res) => {
       });
     }
 
-    // Get window name, pane title, window count, pane count, and current working directory
-    // Format: "window_name|pane_title|session_windows|window_index|pane_count|pane_current_path"
+    // Get window name, pane title, window count, pane count, current working directory, and marked status
+    // Format: "window_name|pane_title|session_windows|window_index|pane_count|pane_current_path|pane_marked"
     const info = execSync(
-      `tmux display-message -t "${name}" -p "#{window_name}|#{pane_title}|#{session_windows}|#{window_index}|#{window_panes}|#{pane_current_path}"`,
+      `tmux display-message -t "${name}" -p "#{window_name}|#{pane_title}|#{session_windows}|#{window_index}|#{window_panes}|#{pane_current_path}|#{pane_marked}"`,
       { encoding: 'utf-8' }
     ).trim();
 
-    const [windowName, paneTitle, windowCountStr, activeWindowStr, paneCountStr, currentPath] = info.split('|');
+    const [windowName, paneTitle, windowCountStr, activeWindowStr, paneCountStr, currentPath, paneMarkedStr] = info.split('|');
     const windowCount = parseInt(windowCountStr, 10);
     const activeWindow = parseInt(activeWindowStr, 10);
     const paneCount = parseInt(paneCountStr, 10);
+    const paneMarked = paneMarkedStr === '1';
 
     // Shorten path for display (replace home directory with ~)
     const homeDir = require('os').homedir();
@@ -873,10 +874,59 @@ router.get('/tmux/info/:name', asyncHandler(async (req, res) => {
       windowCount: windowCount || 1,
       activeWindow: activeWindow || 0,
       paneCount: paneCount || 1,
+      paneMarked: paneMarked || false,
       sessionName: name
     });
   } catch (err) {
     console.error(`[API] Failed to get tmux info for ${name}:`, err.message);
+    res.status(500).json({
+      success: false,
+      error: err.message
+    });
+  }
+}));
+
+/**
+ * GET /api/tmux/windows/:name - List all windows in a tmux session
+ * Returns array of windows with index, name, and active status
+ */
+router.get('/tmux/windows/:name', asyncHandler(async (req, res) => {
+  const { name } = req.params;
+  const { execSync } = require('child_process');
+
+  try {
+    // Check if session exists
+    try {
+      execSync(`tmux has-session -t "${name}" 2>/dev/null`);
+    } catch {
+      return res.status(404).json({
+        success: false,
+        error: `Session ${name} not found`
+      });
+    }
+
+    // List all windows in the session
+    // Format: "index|name|active"
+    const output = execSync(
+      `tmux list-windows -t "${name}" -F "#{window_index}|#{window_name}|#{window_active}"`,
+      { encoding: 'utf-8' }
+    ).trim();
+
+    const windows = output.split('\n').map(line => {
+      const [index, windowName, active] = line.split('|');
+      return {
+        index: parseInt(index, 10),
+        name: windowName,
+        active: active === '1'
+      };
+    });
+
+    res.json({
+      success: true,
+      windows
+    });
+  } catch (err) {
+    console.error(`[API] Failed to list windows for ${name}:`, err.message);
     res.status(500).json({
       success: false,
       error: err.message

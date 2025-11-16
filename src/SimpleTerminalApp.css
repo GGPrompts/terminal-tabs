@@ -1590,6 +1590,37 @@
   background: rgba(59, 130, 246, 0.5);
 }
 
+.context-menu-item.disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+.context-menu-divider {
+  height: 1px;
+  background: rgba(255, 255, 255, 0.1);
+  margin: 4px 8px;
+}
+
+.context-menu-submenu {
+  position: relative;
+}
+
+.context-submenu-panel {
+  position: absolute;
+  left: 100%;
+  top: 0;
+  margin-left: 4px;
+  background: rgba(20, 20, 20, 0.95);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+  padding: 4px;
+  min-width: 160px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(10px);
+  z-index: 10001;
+}
+
 /* Rename Dialog */
 .rename-dialog-overlay {
   position: fixed;

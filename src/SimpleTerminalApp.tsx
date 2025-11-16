@@ -364,6 +364,21 @@ function SimpleTerminalApp() {
     terminalId: string | null
   }>({ show: false, x: 0, y: 0, terminalId: null })
 
+  // Pane context menu state (right-click inside terminal)
+  const [paneContextMenu, setPaneContextMenu] = useState<{
+    show: boolean
+    x: number
+    y: number
+    terminalId: string | null
+  }>({ show: false, x: 0, y: 0, terminalId: null })
+
+  // Tmux windows list for window switcher submenu
+  const [tmuxWindows, setTmuxWindows] = useState<{index: number, name: string, active: boolean}[]>([])
+  const [showWindowSubmenu, setShowWindowSubmenu] = useState(false)
+
+  // Pane marked status
+  const [paneMarked, setPaneMarked] = useState(false)
+
   // Rename dialog state
   const [renameDialog, setRenameDialog] = useState<{
     show: boolean
@@ -820,6 +835,21 @@ function SimpleTerminalApp() {
     }
   }, [contextMenu.show])
 
+  // Close pane context menu on outside click
+  useEffect(() => {
+    if (!paneContextMenu.show) return
+
+    const handleClick = () => {
+      setPaneContextMenu({ show: false, x: 0, y: 0, terminalId: null })
+      setShowWindowSubmenu(false)
+    }
+
+    document.addEventListener('click', handleClick)
+    return () => {
+      document.removeEventListener('click', handleClick)
+    }
+  }, [paneContextMenu.show])
+
   // Close detached dropdown on outside click
   useEffect(() => {
     if (!showDetachedDropdown) return
@@ -1060,6 +1090,126 @@ function SimpleTerminalApp() {
     }
 
     setContextMenu({ show: false, x: 0, y: 0, terminalId: null })
+  }
+
+  // Handle tmux split (horizontal or vertical) - from tab menu
+  const handleTmuxSplit = async (direction: 'horizontal' | 'vertical') => {
+    if (!contextMenu.terminalId) return
+    const terminal = storedTerminals.find(t => t.id === contextMenu.terminalId)
+    if (!terminal?.sessionName) return
+
+    console.log(`[SimpleTerminalApp] Creating tmux ${direction} split in session: ${terminal.sessionName}`)
+
+    try {
+      const response = await fetch(`/api/tmux/sessions/${terminal.sessionName}/command`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          command: direction === 'horizontal' ? 'split-window -h' : 'split-window -v'
+        })
+      })
+
+      if (!response.ok) {
+        console.error(`[SimpleTerminalApp] Failed to create tmux split: ${response.statusText}`)
+      } else {
+        console.log(`[SimpleTerminalApp] ✓ Tmux ${direction} split created successfully`)
+      }
+    } catch (error) {
+      console.error(`[SimpleTerminalApp] Error creating tmux split:`, error)
+    }
+
+    setContextMenu({ show: false, x: 0, y: 0, terminalId: null })
+  }
+
+  // Handle pane context menu open
+  const handlePaneContextMenu = async (e: React.MouseEvent, terminalId: string) => {
+    e.preventDefault()
+    e.stopPropagation()
+
+    const terminal = storedTerminals.find(t => t.id === terminalId)
+    console.log('[handlePaneContextMenu] Terminal:', terminal)
+    console.log('[handlePaneContextMenu] sessionName:', terminal?.sessionName, 'status:', terminal?.status)
+
+    // Fetch marked status if terminal has a session
+    if (terminal?.sessionName) {
+      try {
+        const response = await fetch(`/api/tmux/info/${terminal.sessionName}`)
+        const data = await response.json()
+        if (data.success) {
+          setPaneMarked(data.paneMarked || false)
+        }
+      } catch (error) {
+        console.error('[handlePaneContextMenu] Error fetching pane info:', error)
+        setPaneMarked(false)
+      }
+    } else {
+      setPaneMarked(false)
+    }
+
+    setPaneContextMenu({
+      show: true,
+      x: e.clientX,
+      y: e.clientY,
+      terminalId
+    })
+  }
+
+  // Tmux pane commands (from pane context menu)
+  const executeTmuxPaneCommand = async (command: string, terminalId?: string) => {
+    const id = terminalId || paneContextMenu.terminalId
+    if (!id) return
+
+    const terminal = storedTerminals.find(t => t.id === id)
+    if (!terminal?.sessionName) return
+
+    console.log(`[SimpleTerminalApp] Executing tmux command "${command}" on session: ${terminal.sessionName}`)
+
+    try {
+      const response = await fetch(`/api/tmux/sessions/${terminal.sessionName}/command`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ command })
+      })
+
+      if (!response.ok) {
+        console.error(`[SimpleTerminalApp] Failed to execute tmux command: ${response.statusText}`)
+      } else {
+        console.log(`[SimpleTerminalApp] ✓ Tmux command executed successfully`)
+      }
+    } catch (error) {
+      console.error(`[SimpleTerminalApp] Error executing tmux command:`, error)
+    }
+
+    setPaneContextMenu({ show: false, x: 0, y: 0, terminalId: null })
+    setShowWindowSubmenu(false)
+  }
+
+  // Fetch tmux windows for window switcher
+  const fetchTmuxWindows = async (sessionName: string) => {
+    try {
+      const response = await fetch(`/api/tmux/windows/${sessionName}`)
+      const data = await response.json()
+      if (data.success) {
+        setTmuxWindows(data.windows)
+        setShowWindowSubmenu(true)
+      }
+    } catch (error) {
+      console.error(`[SimpleTerminalApp] Error fetching tmux windows:`, error)
+    }
+  }
+
+  // Handle kill pane (special case - removes terminal from UI)
+  const handleKillPane = async () => {
+    if (!paneContextMenu.terminalId) return
+    const terminal = storedTerminals.find(t => t.id === paneContextMenu.terminalId)
+    if (!terminal?.sessionName) return
+
+    console.log(`[SimpleTerminalApp] Killing tmux pane: ${terminal.sessionName}`)
+
+    await executeTmuxPaneCommand('kill-pane')
+
+    // Remove terminal from UI
+    removeTerminal(paneContextMenu.terminalId)
   }
 
   // Handle re-attaching a detached terminal
@@ -2360,6 +2510,7 @@ End of error report
                     wsRef={wsRef}
                     terminalRef={terminalRef}
                     activeTerminalId={activeTerminalId}
+                    onContextMenu={handlePaneContextMenu}
                   />
                 </div>
               )
@@ -2519,13 +2670,17 @@ End of error report
                   </button>
                 )}
                 {isInSplit && (
-                  <button
-                    className="context-menu-item"
-                    onClick={handleContextUnsplit}
-                  >
-                    ↔️ Unsplit
-                  </button>
+                  <>
+                    <div className="context-menu-divider" />
+                    <button
+                      className="context-menu-item"
+                      onClick={handleContextUnsplit}
+                    >
+                      ↔️ Unsplit
+                    </button>
+                  </>
                 )}
+                <div className="context-menu-divider" />
                 <button
                   className="context-menu-item"
                   onClick={() => handleContextPopOut('tab')}
@@ -2538,6 +2693,7 @@ End of error report
                 >
                   ↗️ Open in Separate Window
                 </button>
+                <div className="context-menu-divider" />
                 <button
                   className="context-menu-item"
                   onClick={() => {
@@ -2548,6 +2704,127 @@ End of error report
                   }}
                 >
                   ❌ Kill Session
+                </button>
+              </>
+            )
+          })()}
+        </div>
+      )}
+
+      {/* Pane Context Menu (right-click inside terminal) */}
+      {paneContextMenu.show && paneContextMenu.terminalId && (
+        <div
+          className="tab-context-menu"
+          style={{
+            position: 'fixed',
+            left: `${paneContextMenu.x}px`,
+            top: `${paneContextMenu.y}px`,
+            zIndex: 10000,
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          {(() => {
+            const terminal = storedTerminals.find(t => t.id === paneContextMenu.terminalId)
+            const hasSession = terminal?.sessionName && terminal?.status !== 'detached'
+
+            if (!hasSession) {
+              return <div className="context-menu-item disabled">No tmux session</div>
+            }
+
+            // Get window count for showing window switcher
+            const windowCount = terminal.windowCount || 1
+
+            return (
+              <>
+                <button
+                  className="context-menu-item"
+                  onClick={() => executeTmuxPaneCommand('split-window -h')}
+                >
+                  ➗ Split Horizontally
+                </button>
+                <button
+                  className="context-menu-item"
+                  onClick={() => executeTmuxPaneCommand('split-window -v')}
+                >
+                  ➖ Split Vertically
+                </button>
+                <div className="context-menu-divider" />
+                <button
+                  className="context-menu-item"
+                  onClick={() => executeTmuxPaneCommand('swap-pane -U')}
+                >
+                  ⬆️ Swap Up
+                </button>
+                <button
+                  className="context-menu-item"
+                  onClick={() => executeTmuxPaneCommand('swap-pane -D')}
+                >
+                  ⬇️ Swap Down
+                </button>
+                <div className="context-menu-divider" />
+                {paneMarked ? (
+                  <button
+                    className="context-menu-item"
+                    onClick={() => executeTmuxPaneCommand('select-pane -M')}
+                  >
+                    📍 Unmark
+                  </button>
+                ) : (
+                  <button
+                    className="context-menu-item"
+                    onClick={() => executeTmuxPaneCommand('select-pane -m')}
+                  >
+                    📌 Mark
+                  </button>
+                )}
+                <button
+                  className="context-menu-item"
+                  onClick={() => executeTmuxPaneCommand('swap-pane -s \'{marked}\'')}
+                >
+                  ↔️ Swap with Marked
+                </button>
+                <div className="context-menu-divider" />
+                {windowCount > 1 && (
+                  <div
+                    className="context-menu-submenu"
+                    onMouseEnter={() => fetchTmuxWindows(terminal.sessionName!)}
+                  >
+                    <button className="context-menu-item">
+                      🪟 Switch Window ▶
+                    </button>
+                    {showWindowSubmenu && tmuxWindows.length > 0 && (
+                      <div className="context-submenu-panel">
+                        {tmuxWindows.map(win => (
+                          <button
+                            key={win.index}
+                            className="context-menu-item"
+                            onClick={() => executeTmuxPaneCommand(`select-window -t :${win.index}`)}
+                          >
+                            {win.name} {win.active ? '✓' : ''}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+                <button
+                  className="context-menu-item"
+                  onClick={() => executeTmuxPaneCommand('respawn-pane -k')}
+                >
+                  🔄 Respawn
+                </button>
+                <button
+                  className="context-menu-item"
+                  onClick={() => executeTmuxPaneCommand('resize-pane -Z')}
+                >
+                  🔍 Zoom
+                </button>
+                <div className="context-menu-divider" />
+                <button
+                  className="context-menu-item"
+                  onClick={handleKillPane}
+                >
+                  ❌ Kill Pane
                 </button>
               </>
             )
