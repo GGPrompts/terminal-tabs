@@ -82,9 +82,11 @@ if ! command -v tmux &> /dev/null; then
 fi
 
 # Kill existing session if it exists
-if tmux has-session -t $SESSION_NAME 2>/dev/null; then
+# Use "=" prefix for exact matching to avoid killing sessions with same prefix
+# (e.g., "tabz" should not match "tabz-chrome")
+if tmux has-session -t "=$SESSION_NAME" 2>/dev/null; then
     echo -e "${YELLOW}⚠️  Existing session found. Killing it...${NC}"
-    tmux kill-session -t $SESSION_NAME
+    tmux kill-session -t "=$SESSION_NAME"
 fi
 
 # Check if backend dependencies are installed
@@ -135,7 +137,7 @@ fi
 echo -e "  Kill:    ${YELLOW}tmux kill-session -t $SESSION_NAME${NC}"
 echo ""
 echo -e "${BLUE}URLs:${NC}"
-echo -e "  Frontend: ${YELLOW}http://localhost:5173${NC}"
+echo -e "  Frontend: ${YELLOW}http://localhost:3007${NC}"
 echo -e "  Backend:  ${YELLOW}http://localhost:8127${NC}"
 echo ""
 echo -e "${BLUE}Log Level: ${YELLOW}$LOG_LEVEL${NC} ${NC}(0=silent, 1=fatal, 2=error, 3=warn, 4=info, 5=debug)"
