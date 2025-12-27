@@ -5,7 +5,7 @@
     "fontFamily": "'JetBrainsMono Nerd Font', 'JetBrainsMono NF', monospace",
     "fontSize": 16,
     "theme": "holographic",
-    "background": "carbon",
+    "background": "aurora-borealis",
     "transparency": 90,
     "useTmux": true
   },

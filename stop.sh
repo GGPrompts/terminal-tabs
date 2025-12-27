@@ -56,10 +56,10 @@ if [ ! -z "$BACKEND_PORT_PID" ]; then
     kill $BACKEND_PORT_PID 2>/dev/null || true
 fi
 
-# Kill any process on port 5173 (frontend)
-FRONTEND_PORT_PID=$(lsof -ti:5173 2>/dev/null || true)
+# Kill any process on port 3007 (frontend)
+FRONTEND_PORT_PID=$(lsof -ti:3007 2>/dev/null || true)
 if [ ! -z "$FRONTEND_PORT_PID" ]; then
-    echo -e "${YELLOW}Killing process on port 5173...${NC}"
+    echo -e "${YELLOW}Killing process on port 3007...${NC}"
     kill $FRONTEND_PORT_PID 2>/dev/null || true
 fi
 

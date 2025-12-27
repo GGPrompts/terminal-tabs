@@ -8,7 +8,7 @@ set -e
 export NODE_ENV=${NODE_ENV:-development}
 export LOG_LEVEL=${LOG_LEVEL:-4}
 export BACKEND_PORT=${BACKEND_PORT:-8127}
-export FRONTEND_PORT=${FRONTEND_PORT:-5173}
+export FRONTEND_PORT=${FRONTEND_PORT:-3007}
 
 # Force consistent terminal type
 export TERM=xterm-256color

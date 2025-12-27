@@ -58,7 +58,7 @@ cd backend && npm start
 npm run dev
 ```
 
-Access at http://localhost:5173
+Access at http://localhost:3007
 
 ## Architecture
 

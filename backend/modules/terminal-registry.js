@@ -213,8 +213,9 @@ class TerminalRegistry extends EventEmitter {
     }
 
     // NEW TERMINAL: Generate unique ID and name
-    // Prefix with ctt- (Chrome Terminal Tabs) to identify sessions from this app
-    const id = 'ctt-' + uuidv4();
+    // Prefix with tt- (Tabz Terminal) to identify sessions from this app
+    // NOTE: TabzChrome uses ctt- prefix to differentiate
+    const id = 'tt-' + uuidv4();
 
     // Update name counters before generating a new name
     this.updateNameCounters();

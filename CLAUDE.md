@@ -613,7 +613,7 @@ LOG_LEVEL=5  # Shows detailed PTY operations, tmux session info
 
 ### Dev Server Ports
 
-- **Frontend**: http://localhost:5173 (Vite dev server)
+- **Frontend**: http://localhost:3007 (Vite dev server)
 - **Backend**: http://localhost:8127 (WebSocket + REST API)
 - **WebSocket**: ws://localhost:8127
 
