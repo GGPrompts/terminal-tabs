@@ -1,12 +1,12 @@
 {
   "projects": [],
   "globalDefaults": {
-    "workingDirectory": "/home/matt",
+    "workingDirectory": "~",
     "fontFamily": "'JetBrainsMono Nerd Font', 'JetBrainsMono NF', monospace",
     "fontSize": 16,
     "theme": "holographic",
-    "background": "aurora-borealis",
-    "transparency": 90,
+    "background": "neon-city",
+    "transparency": 51,
     "useTmux": true
   },
   "spawnOptions": [
